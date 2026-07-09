@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.legacy.LegacySrMapper">
+
+  <!--
+    query1: 개발자×SR유형별 건수·시간 집계 (기간계 SELECT-only)
+    - JOB_EXEC_HOUR는 VARCHAR2(6) → TO_NUMBER(TRIM(...)) 으로 합산
+    - SR_REG_STAT_CODE NOT IN 목록: 미등록/취소/보류 등 제외 코드
+    - SR_TPCD NOT IN ('15'): 기타 제외 코드
+  -->
+  <select id="selectDevAgg" resultType="com.meritz.dash.aggregation.LegacyDevRow">
+    SELECT b.SPIC_EMPNO                               AS empno,
+           a.SR_TPCD                                  AS srTpcd,
+           COUNT(*)                                   AS srCnt,
+           SUM(TO_NUMBER(TRIM(b.JOB_EXEC_HOUR)))      AS jobHours
+      FROM TBCPPE091M00 a
+      INNER JOIN TBCPPE093L00 b ON a.SR_NO = b.SR_NO
+     WHERE b.APRV_YN = 'Y'
+       AND SUBSTR(b.FIN_DATE,1,6) = #{periodYm}
+       AND a.SR_REG_STAT_CODE NOT IN ('00','09','16','97','99','22')
+       AND a.SR_TPCD NOT IN ('15')
+     GROUP BY b.SPIC_EMPNO, a.SR_TPCD
+  </select>
+
+  <!--
+    query2: SR별 총 공수(MM)·참여 인원 집계 (기간계 SELECT-only)
+    - JOB_MANM는 VARCHAR2(6) → TO_NUMBER(TRIM(...)) 으로 합산
+    - 097은 (SR_TPCD, SR_DETL_TPCD) 복합PK → SR_TPCD당 여러 행 존재 → fan-out 방지를 위해 GROUP BY 서브쿼리로 dedupe
+    - SUBSTR(b.FIN_DATE,1,6) = #{periodYm}: 기간 필터(월별 집계)
+    - HAVING SUM(...) >= #{minMm}: 최소 투입 MM 임계값 필터
+  -->
+  <select id="selectSrProjects" resultType="com.meritz.dash.aggregation.LegacySrProjectRow">
+    SELECT a.SR_NO                                       AS srNo,
+           a.TITL_CNTT                                   AS titlCntt,
+           a.SR_TPCD                                     AS srTpcd,
+           c.SR_TPCD_NAME                                AS srTpcdName,
+           SUM(TO_NUMBER(TRIM(b.JOB_MANM)))              AS totMm,
+           COUNT(DISTINCT b.MNPL_EMPNO)                  AS empCnt,
+           a.PRCH_DPCD                                   AS prchDpcd,
+           a.DPCD                                        AS dpcd,
+           a.REG_DATE                                    AS regDate,
+           a.RFLC_SCDL_DATE                              AS rflcScdlDate
+      FROM TBCPPE091M00 a
+      INNER JOIN TBCPPE093L00 b ON a.SR_NO = b.SR_NO
+      LEFT JOIN (
+          SELECT SR_TPCD, MAX(SR_TPCD_NAME) SR_TPCD_NAME
+            FROM TBCPPE097L00
+           GROUP BY SR_TPCD
+      ) c ON a.SR_TPCD = c.SR_TPCD
+     WHERE a.SR_REG_STAT_CODE IN ('02','03','04','05','06','07','17')
+       AND b.APRV_YN = 'Y'
+       AND SUBSTR(b.FIN_DATE,1,6) = #{periodYm}
+     GROUP BY a.SR_NO, a.TITL_CNTT, a.SR_TPCD, c.SR_TPCD_NAME,
+              a.PRCH_DPCD, a.DPCD, a.REG_DATE, a.RFLC_SCDL_DATE
+    HAVING SUM(TO_NUMBER(TRIM(b.JOB_MANM))) >= #{minMm}
+     ORDER BY totMm DESC
+  </select>
+
+</mapper>

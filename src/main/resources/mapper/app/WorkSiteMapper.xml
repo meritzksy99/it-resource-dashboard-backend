@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.app.WorkSiteMapper">
+
+  <select id="findActive" resultType="com.meritz.dash.worksite.WorkSite">
+    SELECT SITE_URL    AS url,
+           SITE_NM     AS name,
+           DESCRIPTION AS description
+      FROM WORK_SITE
+     WHERE USE_YN = 'Y'
+     ORDER BY SORT_NO, SITE_NM
+  </select>
+
+</mapper>

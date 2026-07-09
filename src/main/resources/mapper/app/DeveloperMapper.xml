@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.app.DeveloperMapper">
+
+  <sql id="cols">
+    EMPNO AS empno, EMP_NM AS empNm, DEPT_CD AS deptCd, PART_CD AS partCd,
+    GRADE_CD AS gradeCd, ROLE_CD AS roleCd, DEV_YN AS devYn, STATUS_CD AS statusCd
+  </sql>
+
+  <select id="findAll" resultType="com.meritz.dash.developer.Developer">
+    SELECT <include refid="cols"/>
+      FROM HR_DEVELOPER
+     <where>
+       <if test="deptCd != null and deptCd != ''">AND DEPT_CD = #{deptCd}</if>
+       <if test="partCd != null and partCd != ''">AND PART_CD = #{partCd}</if>
+       <if test="devYn != null">AND DEV_YN = #{devYn}</if>
+       <if test="statusCd != null">AND STATUS_CD = #{statusCd}</if>
+     </where>
+     ORDER BY EMPNO
+  </select>
+
+  <select id="findByEmpno" resultType="com.meritz.dash.developer.Developer">
+    SELECT <include refid="cols"/>
+      FROM HR_DEVELOPER
+     WHERE EMPNO = #{empno}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO HR_DEVELOPER
+      (EMPNO, EMP_NM, DEPT_CD, PART_CD, GRADE_CD, ROLE_CD, DEV_YN, STATUS_CD)
+    VALUES
+      (#{empno}, #{empNm}, #{deptCd}, #{partCd}, #{gradeCd}, #{roleCd}, #{devYn}, #{statusCd})
+  </insert>
+
+  <update id="update">
+    UPDATE HR_DEVELOPER
+       SET EMP_NM = #{empNm}, DEPT_CD = #{deptCd}, PART_CD = #{partCd},
+           GRADE_CD = #{gradeCd}, ROLE_CD = #{roleCd}, DEV_YN = #{devYn},
+           STATUS_CD = #{statusCd}, UPDATED_AT = SYSTIMESTAMP, UPDATED_BY = 'SYSTEM'
+     WHERE EMPNO = #{empno}
+  </update>
+
+  <delete id="deleteByEmpno">
+    DELETE FROM HR_DEVELOPER WHERE EMPNO = #{empno}
+  </delete>
+</mapper>

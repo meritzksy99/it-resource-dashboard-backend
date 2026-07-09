@@ -1,0 +1,25 @@
+# 빌드 컨텍스트 최소화 + 머신 한정/비밀 파일 제외.
+# 단, 런타임 전용 Dockerfile 이 쓰는 build/libs/*.jar 는 포함해야 하므로 build/ 는 선별 제외.
+build/*
+!build/libs
+build/libs/*
+!build/libs/*.jar
+
+.git
+.gitignore
+.gradle/
+.idea/
+.vscode/
+.claude/
+gradle.properties          # 로컬 JDK 경로(org.gradle.java.home) — 컨테이너에 들어가면 빌드 깨짐
+*.env
+.env
+docs/
+prd/
+etl-hop/
+**/*.md
+**/.DS_Store
+*.xlsx
+Dockerfile
+Dockerfile.selfcontained
+.dockerignore

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.app.DashWriteMapper">
+
+  <!-- DASH_DEV_AGG: period 멱등 (delete + insert) -->
+  <delete id="deleteDevAgg">
+    DELETE FROM DASH_DEV_AGG WHERE PERIOD_YM = #{periodYm}
+  </delete>
+
+  <insert id="insertDevAgg">
+    INSERT INTO DASH_DEV_AGG (PERIOD_YM, EMPNO, SR_CLS, SR_CNT, JOB_MM)
+    VALUES (#{periodYm}, #{empno}, #{srCls}, #{srCnt}, #{jobMm})
+  </insert>
+
+  <!-- DASH_RESOURCE -->
+  <delete id="deleteResource">
+    DELETE FROM DASH_RESOURCE WHERE PERIOD_YM = #{periodYm}
+  </delete>
+
+  <insert id="insertResource">
+    INSERT INTO DASH_RESOURCE (PERIOD_YM, UNIT_TYPE, UNIT_ID, HEADCOUNT, AVAIL_HEADCOUNT,
+                                AVAIL_MM, USED_MM, OVERTIME_MM)
+    VALUES (#{periodYm}, #{unitType}, #{unitId}, #{headcount}, #{availHeadcount},
+            #{availMm}, #{usedMm}, #{overtimeMm})
+  </insert>
+
+  <!-- DASH_SR_PROJECT -->
+  <delete id="deleteSrProject">
+    DELETE FROM DASH_SR_PROJECT WHERE PERIOD_YM = #{periodYm}
+  </delete>
+
+  <insert id="insertSrProject">
+    INSERT INTO DASH_SR_PROJECT (PERIOD_YM, SR_NO, TITL_CNTT, SR_TPCD, SR_TPCD_NAME,
+                                  TOT_MM, EMP_CNT, PRCH_DPCD, DPCD, REG_DATE, RFLC_SCDL_DATE)
+    VALUES (#{periodYm}, #{srNo}, #{titlCntt}, #{srTpcd}, #{srTpcdName},
+            #{totMm}, #{empCnt}, #{prchDpcd}, #{dpcd}, #{regDate}, #{rflcScdlDate})
+  </insert>
+
+  <!-- BATCH_RUN_LOG: IDENTITY 키 회수. 컬럼명은 TRIG_TYPE (Oracle 예약어 TRIGGER 회피) -->
+  <insert id="insertRunStart" useGeneratedKeys="true" keyProperty="runId" keyColumn="RUN_ID">
+    INSERT INTO BATCH_RUN_LOG (PERIOD_YM, TRIG_TYPE, STATUS, STARTED_AT)
+    VALUES (#{periodYm}, #{trigger}, 'RUNNING', SYSTIMESTAMP)
+  </insert>
+
+  <update id="updateRunFinish">
+    UPDATE BATCH_RUN_LOG
+       SET STATUS      = #{status},
+           DEV_ROWS    = #{devRows},
+           SR_ROWS     = #{srRows},
+           MSG         = #{msg, jdbcType=VARCHAR},
+           FINISHED_AT = SYSTIMESTAMP
+     WHERE RUN_ID = #{runId}
+  </update>
+
+</mapper>

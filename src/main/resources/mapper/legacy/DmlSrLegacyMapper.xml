@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.legacy.DmlSrLegacyMapper">
+
+  <!--
+    DML성 SR 월별 조회 (기간계 SELECT-only). 참조쿼리 `쿼리/DML월별조회쿼리.sql` 기반.
+    - 부서필터(:PRED_DPCD)는 제거(전체 조회 후 앱에서 HR 매칭), A.PRCH_EMPNO(picEmpno)를 추가(HR 매칭 키).
+    - 값 주입은 바인드 변수(#{}) 만 — SQL injection 불가.
+    - 093 승인 작업이력 INNER JOIN 은 SR 당 여러 행일 수 있어 DISTINCT 로 fan-out 중복 제거.
+    - 업무상세분류명(TBCPPE091D02/TBCPPE108C01)은 스칼라 서브쿼리 + NVL('미등록') 로 결측 방어.
+
+    주의: resultType 이 record(DmlSrLegacyRow) 위치기반 생성자 매핑이므로,
+    SELECT 컬럼 순서 = DmlSrLegacyRow 컴포넌트 순서(srNo..prosCmptDate) 를 반드시 유지할 것.
+  -->
+  <select id="selectDmlSrs" resultType="com.meritz.dash.dml.DmlSrLegacyRow">
+    SELECT DISTINCT
+           A.SR_NO                                                                  AS srNo,
+           A.SR_TPCD                                                                AS srTpcd,
+           C.SR_TPCD_NAME                                                           AS srTpcdName,
+           (SELECT NVL(DT.SR_BSWR_DETL_DIV_NAME, '미등록')
+              FROM TBCPPE091D02 S, TBCPPE108C01 DT
+             WHERE S.SR_NO = A.SR_NO
+               AND S.SR_BSWR_DETL_DVCD = DT.SR_BSWR_DETL_DVCD(+)
+               AND ROWNUM &lt;= 1)                                                  AS bswrDetlName,
+           A.SR_REG_STAT_CODE                                                       AS statusCode,
+           A.TITL_CNTT                                                              AS titlCntt,
+           A.MSG_CNTT                                                               AS msgCntt,
+           A.CUST_INFO_YN                                                           AS custInfoYn,
+           A.RQSR_EMPNO                                                             AS rqsrEmpno,
+           (SELECT F.FLNM FROM TBCPPU001I00 F WHERE F.EMPNO = A.RQSR_EMPNO)         AS rqsrNm,
+           (SELECT F2.BLNG_DPCD FROM TBCPPU001I00 F2 WHERE F2.EMPNO = A.RQSR_EMPNO) AS rqsrDpcd,
+           (SELECT F3.FLNM FROM TBCPPU001I00 F3 WHERE F3.EMPNO = A.TRTH_RQST_EMPNO) AS trthRqstNm,
+           A.TRTH_RQST_DPCD                                                         AS trthRqstDpcd,
+           A.PRCH_EMPNO                                                             AS picEmpno,
+           (SELECT F4.FLNM FROM TBCPPU001I00 F4 WHERE F4.EMPNO = A.PRCH_EMPNO)      AS picNm,
+           D.BLNG_DPCD                                                              AS picDpcd,
+           (SELECT DD.DPNM FROM TBCPPD001M00 DD WHERE DD.DPCD = D.BLNG_DPCD)        AS picDpnm,
+           A.REG_DATE                                                               AS regDate,
+           A.RFLC_SCDL_DATE                                                         AS rflcScdlDate,
+           A.PROS_CMPT_DATE                                                         AS prosCmptDate
+      FROM TBCPPE091M00 A
+      JOIN TBCPPE093L00 B ON A.SR_NO = B.SR_NO
+      JOIN TBCPPE097L00 C ON A.SR_TPCD = C.SR_TPCD
+      LEFT JOIN TBCPPU001I00 D ON A.PRCH_EMPNO = D.EMPNO
+     WHERE A.SR_TPCD IN ('18', '19')
+       AND SUBSTR(A.REG_DATE, 1, 6) = #{baseYm}
+     ORDER BY A.SR_NO
+  </select>
+
+</mapper>

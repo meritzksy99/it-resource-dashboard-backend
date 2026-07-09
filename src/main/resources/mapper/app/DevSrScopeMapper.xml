@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.app.DevSrScopeMapper">
+
+  <!-- 재직(STATUS_CD='01') 직원만. findRefs(목록)와 정책 일치 — 팀장/리더가 퇴직자 사번 지정 시 스코프 밖(403)으로 처리되게. -->
+  <select id="findRef" resultType="com.meritz.dash.mapper.app.DevSrScopeMapper$HrRef">
+    SELECT h.EMPNO   AS empno,
+           h.EMP_NM  AS empNm,
+           h.DEPT_CD AS deptCd,
+           h.PART_CD AS partCd
+      FROM HR_DEVELOPER h
+     WHERE h.EMPNO = #{empno}
+       AND h.STATUS_CD = '01'
+  </select>
+
+  <!-- 재직 직원. dept/part 는 있으면 필터(부서→파트 순 좁힘). 값 주입은 #{} 바인드만. -->
+  <select id="findRefs" resultType="com.meritz.dash.mapper.app.DevSrScopeMapper$HrRef">
+    SELECT h.EMPNO   AS empno,
+           h.EMP_NM  AS empNm,
+           h.DEPT_CD AS deptCd,
+           h.PART_CD AS partCd
+      FROM HR_DEVELOPER h
+     WHERE h.STATUS_CD = '01'
+     <if test="dept != null"> AND h.DEPT_CD = #{dept} </if>
+     <if test="part != null"> AND h.PART_CD = #{part} </if>
+     ORDER BY h.EMPNO
+  </select>
+
+</mapper>

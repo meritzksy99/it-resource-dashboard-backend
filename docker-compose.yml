@@ -1,0 +1,32 @@
+services:
+  oracle-app:
+    image: gvenzl/oracle-free:latest
+    container_name: dash-oracle-app
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PASSWORD: oracle
+      APP_USER: appuser
+      APP_USER_PASSWORD: apppw
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  oracle-legacy:
+    image: gvenzl/oracle-free:latest
+    container_name: dash-oracle-legacy
+    ports:
+      - "1522:1521"
+    environment:
+      ORACLE_PASSWORD: oracle
+      APP_USER: legacyuser
+      APP_USER_PASSWORD: legacypw
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s

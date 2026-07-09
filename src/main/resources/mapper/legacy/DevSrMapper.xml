@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.legacy.DevSrMapper">
+
+  <!--
+    개발자별 실시간 SR 현황 (기간계 SELECT-only). 사용자 참조쿼리 기반.
+    - 값 주입은 바인드 변수(#{}) 만. empnos 는 foreach IN 바인딩(SQL injection 불가).
+    - JOB_EXEC_HOUR/JOB_MANM 은 VARCHAR2 → SUM(TO_NUMBER(TRIM(...))) (legacy-schema-notes 규칙).
+
+    두 갈래를 UNION ALL:
+    ① 계획 수립 SR — 승인 작업이력(093, APRV_YN='Y') 기준, 담당자(093.SPIC_EMPNO)의 작업시간/계획 M/M 합.
+       진행중 상태만: SR_REG_STAT_CODE NOT IN (등록/배포/종료/취소 등), SR_TPCD NOT IN ('15'). planYn='Y'.
+    ② SR등록('02') — 계획 미수립. 신청자(091.PRCH_EMPNO) 기준, 시간/MM/반영예정일 없음. planYn='N'.
+    두 갈래는 상태코드 집합이 겹치지 않아(①은 02 제외, ②는 02만) UNION ALL 로 안전(중복 없음).
+
+    주의: resultType 이 record(DevSrRow) 위치기반 생성자 매핑이므로,
+    SELECT 컬럼 순서 = DevSrRow 컴포넌트 순서(empno..planYn) 를 반드시 유지할 것.
+  -->
+  <select id="selectDevSrs" resultType="com.meritz.dash.devsr.DevSrRow">
+    SELECT b.SPIC_EMPNO                                 AS empno,
+           a.SR_NO                                      AS srNo,
+           a.SR_REG_STAT_CODE                           AS statusCode,
+           a.SR_TPCD                                    AS srTpcd,
+           a.RFLC_SCDL_DATE                             AS rflcScdlDate,
+           a.TITL_CNTT                                  AS titlCntt,
+           a.MSG_CNTT                                   AS msgCntt,
+           NVL(SUM(TO_NUMBER(TRIM(b.JOB_EXEC_HOUR))), 0) AS jobHours,
+           NVL(SUM(TO_NUMBER(TRIM(b.JOB_MANM))), 0)      AS jobMm,
+           'Y'                                          AS planYn
+      FROM TBCPPE091M00 a
+      INNER JOIN TBCPPE093L00 b ON a.SR_NO = b.SR_NO
+     WHERE b.APRV_YN = 'Y'
+       AND a.SR_REG_STAT_CODE NOT IN ('00','02','07','08','09','16','97','22','18')
+       AND a.SR_TPCD NOT IN ('15')
+       AND b.SPIC_EMPNO IN
+         <foreach item="e" collection="empnos" open="(" separator="," close=")">#{e}</foreach>
+     GROUP BY b.SPIC_EMPNO, a.SR_NO, a.SR_REG_STAT_CODE, a.SR_TPCD,
+              a.RFLC_SCDL_DATE, a.TITL_CNTT, a.MSG_CNTT
+    UNION ALL
+    SELECT a.PRCH_EMPNO                                 AS empno,
+           a.SR_NO                                      AS srNo,
+           a.SR_REG_STAT_CODE                           AS statusCode,
+           a.SR_TPCD                                    AS srTpcd,
+           CAST(NULL AS VARCHAR2(8))                    AS rflcScdlDate,
+           a.TITL_CNTT                                  AS titlCntt,
+           a.MSG_CNTT                                   AS msgCntt,
+           0                                            AS jobHours,
+           0                                            AS jobMm,
+           'N'                                          AS planYn
+      FROM TBCPPE091M00 a
+     WHERE a.SR_REG_STAT_CODE = '02'
+       AND a.SR_TPCD NOT IN ('15')
+       AND a.PRCH_EMPNO IN
+         <foreach item="e" collection="empnos" open="(" separator="," close=")">#{e}</foreach>
+     ORDER BY statusCode, srNo
+  </select>
+
+</mapper>

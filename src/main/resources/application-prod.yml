@@ -1,0 +1,46 @@
+# ──────────────────────────────────────────────────────────────────────────
+# 운영(prod) 프로파일 — 폐쇄망 배포용.
+# 활성화: SPRING_PROFILES_ACTIVE=prod (Docker 이미지 기본값)
+# 모든 DB 접속정보/시크릿은 환경변수로 주입한다(기본값 없음 → 미설정 시 기동 실패=안전).
+# base application.yml 의 나머지 설정(app.mm, springdoc 등)은 그대로 상속된다.
+# ──────────────────────────────────────────────────────────────────────────
+spring:
+  flyway:
+    # 대상 app DB(HR/DASH 테이블)에 마이그레이션 적용 여부.
+    # 운영 기본값 = false (스키마를 이미 만들어 두고 "붙기만" 하는 시나리오 → 기존 스키마 미변경).
+    # 빈 DB에 Flyway가 생성하게 하려면 FLYWAY_ENABLED=true (앱 계정에 DDL 권한 필요).
+    enabled: ${FLYWAY_ENABLED:false}
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+datasource:
+  app:
+    # 예: jdbc:oracle:thin:@app-db-host:1521/ORAPDB
+    jdbc-url: ${APP_DB_URL}
+    username: ${APP_DB_USERNAME}
+    password: ${APP_DB_PASSWORD}
+    maximum-pool-size: ${APP_DB_POOL_MAX:10}
+    pool-name: app-pool
+  legacy:
+    # 기간계(조회 전용). 예: jdbc:oracle:thin:@legacy-db-host:1521/LEGACYPDB
+    jdbc-url: ${LEGACY_DB_URL}
+    username: ${LEGACY_DB_USERNAME}
+    password: ${LEGACY_DB_PASSWORD}
+    maximum-pool-size: ${LEGACY_DB_POOL_MAX:8}
+    connection-timeout: 3000
+    pool-name: legacy-pool
+    # ↓ 기간계 안전장치(절대 유지): 읽기전용 + 기동 시 기간계 down 이어도 앱은 뜬다(장애격리) + statement timeout
+    read-only: true
+    initialization-fail-timeout: -1
+    data-source-properties:
+      oracle.jdbc.ReadTimeout: 5000
+      oracle.net.CONNECT_TIMEOUT: 3000
+
+app:
+  jwt:
+    # 최소 32바이트 랜덤 시크릿. 기본값 없음 → 미설정 시 기동 실패.
+    secret: ${JWT_SECRET}
+    expiration: ${JWT_EXPIRATION:86400000}
+  admin:
+    username: ${ADMIN_USERNAME}
+    password: ${ADMIN_PASSWORD}

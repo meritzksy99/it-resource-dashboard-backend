@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.app.AuthAccountMapper">
+
+  <select id="findByEmpno" resultType="com.meritz.dash.auth.AuthAccount">
+    SELECT EMPNO AS empno, PASSWORD_HASH AS passwordHash, PWD_RESET_YN AS pwdResetYn, FAIL_CNT AS failCnt,
+           STATUS_CD AS statusCd, PASSWORD_CHANGED_AT AS passwordChangedAt,
+           PREV_PASSWORD_HASH AS prevPasswordHash, LAST_LOGIN_AT AS lastLoginAt
+      FROM AUTH_ACCOUNT WHERE EMPNO = #{empno}
+  </select>
+
+  <select id="findEmpnosNeedingAccount" resultType="string">
+    SELECT h.EMPNO FROM HR_DEVELOPER h
+     WHERE h.STATUS_CD = '01'
+       AND NOT EXISTS (SELECT 1 FROM AUTH_ACCOUNT a WHERE a.EMPNO = h.EMPNO)
+  </select>
+
+  <insert id="insertAccount">
+    <!-- PASSWORD_CHANGED_AT: 신규 계정도 생성 시점부터 정책 기산(백필과 동일 취지) -->
+    INSERT INTO AUTH_ACCOUNT (EMPNO, PASSWORD_HASH, PWD_RESET_YN, PASSWORD_CHANGED_AT)
+    VALUES (#{empno}, #{hash}, 'Y', SYSTIMESTAMP)
+  </insert>
+
+  <update id="updatePassword">
+    UPDATE AUTH_ACCOUNT SET PASSWORD_HASH = #{hash}, PWD_RESET_YN = 'N',
+           UPDATED_AT = SYSTIMESTAMP, UPDATED_BY = #{empno} WHERE EMPNO = #{empno}
+  </update>
+
+  <update id="touchLastLogin">
+    UPDATE AUTH_ACCOUNT SET LAST_LOGIN_AT = SYSTIMESTAMP WHERE EMPNO = #{empno}
+  </update>
+
+  <!-- ── 정책(v2/admin) ───────────────────────────── -->
+
+  <update id="incrementFail">
+    UPDATE AUTH_ACCOUNT SET FAIL_CNT = FAIL_CNT + 1,
+           UPDATED_AT = SYSTIMESTAMP, UPDATED_BY = #{empno} WHERE EMPNO = #{empno}
+  </update>
+
+  <update id="lockAccount">
+    UPDATE AUTH_ACCOUNT SET STATUS_CD = '01',
+           UPDATED_AT = SYSTIMESTAMP, UPDATED_BY = #{empno} WHERE EMPNO = #{empno}
+  </update>
+
+  <update id="markDormant">
+    UPDATE AUTH_ACCOUNT SET STATUS_CD = '02',
+           UPDATED_AT = SYSTIMESTAMP, UPDATED_BY = #{empno} WHERE EMPNO = #{empno}
+  </update>
+
+  <update id="loginSuccess">
+    UPDATE AUTH_ACCOUNT SET FAIL_CNT = 0, LAST_LOGIN_AT = SYSTIMESTAMP WHERE EMPNO = #{empno}
+  </update>
+
+  <update id="changePasswordWithHistory">
+    UPDATE AUTH_ACCOUNT SET PASSWORD_HASH = #{hash}, PREV_PASSWORD_HASH = #{prevHash},
+           PWD_RESET_YN = 'N', PASSWORD_CHANGED_AT = SYSTIMESTAMP,
+           UPDATED_AT = SYSTIMESTAMP, UPDATED_BY = #{empno} WHERE EMPNO = #{empno}
+  </update>
+
+  <update id="unlockAccount">
+    UPDATE AUTH_ACCOUNT SET STATUS_CD = '00', FAIL_CNT = 0, LAST_LOGIN_AT = SYSTIMESTAMP,
+           UPDATED_AT = SYSTIMESTAMP, UPDATED_BY = 'ADMIN' WHERE EMPNO = #{empno}
+  </update>
+
+  <update id="resetToDefault">
+    UPDATE AUTH_ACCOUNT SET PASSWORD_HASH = #{hash}, PWD_RESET_YN = 'Y',
+           PASSWORD_CHANGED_AT = SYSTIMESTAMP, STATUS_CD = '00', FAIL_CNT = 0, PREV_PASSWORD_HASH = NULL,
+           UPDATED_AT = SYSTIMESTAMP, UPDATED_BY = 'ADMIN' WHERE EMPNO = #{empno}
+  </update>
+
+  <select id="findAllForAdmin" resultType="com.meritz.dash.mapper.app.AuthAccountMapper$AdminRow">
+    SELECT a.EMPNO AS empno, h.EMP_NM AS name, a.STATUS_CD AS statusCd, a.FAIL_CNT AS failCnt,
+           a.LAST_LOGIN_AT AS lastLoginAt, a.PASSWORD_CHANGED_AT AS passwordChangedAt
+      FROM AUTH_ACCOUNT a
+      LEFT JOIN HR_DEVELOPER h ON a.EMPNO = h.EMPNO
+     ORDER BY a.EMPNO
+  </select>
+
+</mapper>

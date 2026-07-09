@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.app.PartSrMapper">
+
+  <!-- HR 재직자 명부 (STATUS_CD='01'). part 있으면 PART_CD 필터 추가. -->
+  <select id="findRoster" resultType="java.util.HashMap">
+    SELECT EMPNO, EMP_NM, DEPT_CD, PART_CD
+      FROM HR_DEVELOPER
+     WHERE STATUS_CD = '01'
+       <if test="part != null and part != ''">
+       AND PART_CD = #{part}
+       </if>
+     ORDER BY EMP_NM
+  </select>
+
+  <!-- DASH_DEV_AGG ⨝ HR_DEVELOPER INNER JOIN: (PART_CD, DEPT_CD, SR_CLS) 별 합계.
+       HR에 없는 EMPNO 는 INNER JOIN으로 제외.
+       part 있으면 PART_CD 필터 추가. -->
+  <select id="findSrByPartClass" resultType="java.util.HashMap">
+    SELECT h.PART_CD  AS PART_CD,
+           h.DEPT_CD  AS DEPT_CD,
+           d.SR_CLS   AS SR_CLS,
+           SUM(d.SR_CNT) AS SR_CNT,
+           SUM(d.JOB_MM) AS JOB_MM
+      FROM DASH_DEV_AGG d
+      INNER JOIN HR_DEVELOPER h ON d.EMPNO = h.EMPNO
+     WHERE d.PERIOD_YM = #{period}
+       AND h.STATUS_CD = '01'
+       <if test="part != null and part != ''">
+       AND h.PART_CD = #{part}
+       </if>
+     GROUP BY h.PART_CD, h.DEPT_CD, d.SR_CLS
+     ORDER BY h.PART_CD, h.DEPT_CD, d.SR_CLS
+  </select>
+
+  <!-- CD_COMMON 코드명 목록. GRP_CD 로 필터, USE_YN='Y' 인 코드만. -->
+  <select id="findCodeMap" resultType="java.util.HashMap">
+    SELECT CD_VAL AS CD_VAL, CD_NM AS CD_NM
+      FROM CD_COMMON
+     WHERE GRP_CD = #{grpCd}
+       AND USE_YN = 'Y'
+  </select>
+
+</mapper>

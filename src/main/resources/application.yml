@@ -1,0 +1,65 @@
+app:
+  mm:
+    hours-per-month: 166
+    overtime-threshold: 1.0
+    top-min-mm: 0.6
+  partsr:
+    outsourcing-dept-cd: '9000'
+  dml-sync:
+    cron: ${DML_SYNC_CRON:0 0 3 * * MON}
+  jwt:
+    secret: ${JWT_SECRET:change-me-in-prod-please-32bytes-minimum!!}
+    expiration: ${JWT_EXPIRATION:86400000}
+  admin:
+    # !! 운영 환경에서는 반드시 환경 변수 ADMIN_USERNAME / ADMIN_PASSWORD 로 교체하십시오 !!
+    username: ${ADMIN_USERNAME:admin}
+    password: ${ADMIN_PASSWORD:admin}
+  auth:
+    password:
+      min-length: ${AUTH_PWD_MIN_LENGTH:8}
+      max-age-days: ${AUTH_PWD_MAX_AGE_DAYS:90}
+    lockout:
+      max-fail: ${AUTH_LOCKOUT_MAX_FAIL:10}
+    dormant-days: ${AUTH_DORMANT_DAYS:90}
+
+spring:
+  application:
+    name: it-dash
+  profiles:
+    active: local
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  mvc:
+    problemdetails:
+      enabled: true   # 표준 예외(필수 파라미터 누락/타입 불일치/404 등)도 RFC7807 ProblemDetail로 응답
+  servlet:
+    multipart:
+      max-file-size: 5MB      # 야근 엑셀 업로드 — 과도한 크기 방지
+      max-request-size: 5MB
+server:
+  address: 0.0.0.0
+  port: 8080
+datasource:
+  app:
+    jdbc-url: jdbc:oracle:thin:@localhost:1521/FREEPDB1
+    username: appuser
+    password: ${APP_DB_PASSWORD:apppw}
+    maximum-pool-size: 10
+    pool-name: app-pool
+  legacy:
+    jdbc-url: jdbc:oracle:thin:@localhost:1522/FREEPDB1
+    username: legacyuser
+    password: ${LEGACY_DB_PASSWORD:legacypw}
+    maximum-pool-size: 8
+    connection-timeout: 3000
+    pool-name: legacy-pool
+    read-only: true
+    initialization-fail-timeout: -1
+    data-source-properties:
+      oracle.jdbc.ReadTimeout: 5000
+      oracle.net.CONNECT_TIMEOUT: 3000
+springdoc:
+  swagger-ui:
+    path: /swagger-ui

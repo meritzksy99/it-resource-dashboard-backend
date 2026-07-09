@@ -1,0 +1,46 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.5'
+    id 'io.spring.dependency-management' version '1.1.6'
+}
+group = 'com.meritz'
+version = '0.0.1-SNAPSHOT'
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+repositories { mavenCentral() }
+dependencyManagement {
+    imports { mavenBom 'org.testcontainers:testcontainers-bom:1.20.3' }
+}
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+    // 야근 엑셀(.xlsx) 업로드 파싱 — Apache POI (XSSFWorkbook)
+    // 5.4.1+ : CVE-2025-31672(OOXML 중복 zip entry) 대응
+    implementation 'org.apache.poi:poi-ooxml:5.4.1'
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-oracle'
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+    implementation 'org.springframework.security:spring-security-crypto:6.3.4'
+    runtimeOnly 'com.oracle.database.jdbc:ojdbc11'
+    // 운영 Oracle 문자셋이 KO16MSWIN949(한글 MS949) 등 non-UTF8 일 때 문자셋 변환기 필수.
+    // 없으면 한글 데이터 읽기 시 "Non supported character set (add orai18n.jar ...)" 오류.
+    runtimeOnly 'com.oracle.database.nls:orai18n'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:oracle-free'
+}
+test {
+    useJUnitPlatform()
+    // Docker 호스트는 ~/.testcontainers.properties 또는 DOCKER_HOST 환경변수로 주입한다.
+    // (머신 경로 하드코딩 금지 — 다른 환경에서 조용히 깨짐)
+    def dockerHost = System.getenv('DOCKER_HOST')
+    if (dockerHost) {
+        jvmArgs "-Ddocker.host=${dockerHost}"
+        environment 'DOCKER_HOST', dockerHost
+    }
+    jvmArgs "-Dapi.version=1.40"   // docker-java 3.4.x: colima 서버 최소 API 버전(1.40) 맞춤
+    environment 'TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE', '/var/run/docker.sock'
+}

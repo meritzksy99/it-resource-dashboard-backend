@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.app.HrOvertimeMapper">
+
+  <!-- 재업로드 멱등: 해당 월 기존 행 전체 삭제 후 INSERT -->
+  <delete id="deleteByPeriod">
+    DELETE FROM HR_OVERTIME
+     WHERE PERIOD_YM = #{period}
+  </delete>
+
+  <insert id="insert">
+    INSERT INTO HR_OVERTIME (PERIOD_YM, EMPNO, OT_MINUTES, CREATED_BY)
+    VALUES (#{period}, #{empno}, #{otMinutes}, #{by})
+  </insert>
+
+</mapper>

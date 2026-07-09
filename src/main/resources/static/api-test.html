@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<!--
+  API 테스트 페이지 (개발용) — 디자인 없음, 순수 HTML/JS.
+  Spring Boot static 리소스라 API와 같은 출처로 서빙됨 → CORS 없음.
+  접속: http://localhost:8080/api-test.html  (또는 http://<서버IP>:8080/api-test.html)
+  ⚠️ 운영 배포 전 이 파일 삭제: rm src/main/resources/static/api-test.html
+-->
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>IT 대시보드 API 테스트</title>
+<style>
+  body { font-family: monospace; margin: 16px; max-width: 1100px; }
+  h2 { border-bottom: 2px solid #333; margin-top: 28px; }
+  fieldset { margin: 10px 0; padding: 10px; }
+  legend { font-weight: bold; }
+  label { display: inline-block; min-width: 78px; }
+  input { padding: 3px; margin: 2px; }
+  button { padding: 4px 10px; margin: 2px; cursor: pointer; }
+  .hint { color: #666; font-size: 12px; }
+  .out { background: #f4f4f4; border: 1px solid #ccc; padding: 8px; white-space: pre-wrap;
+         word-break: break-all; max-height: 320px; overflow: auto; margin-top: 6px; }
+  .ok { color: #060; } .err { color: #a00; }
+  #token { width: 100%; }
+  .bar { position: sticky; top: 0; background: #fff8dc; padding: 8px; border: 1px solid #ddd; z-index: 10; }
+</style>
+</head>
+<body>
+<h1>IT 개발팀 리소스 대시보드 — API 테스트</h1>
+
+<div class="bar">
+  <div><label>Base URL</label><input id="base" size="40"> <span class="hint">(기본: 이 페이지 출처)</span></div>
+  <div><label>토큰</label><input id="token" placeholder="로그인하면 자동 채워짐"></div>
+  <div><span id="who">미로그인</span> <button onclick="clearToken()">토큰 지우기</button></div>
+</div>
+
+<!-- ===== 인증 ===== -->
+<h2>1. 인증</h2>
+<fieldset>
+  <legend>로그인 (POST /auth/login) — 공개</legend>
+  <label>사번</label><input id="loginEmpno" value="admin">
+  <label>비밀번호</label><input id="loginPw" value="admin">
+  <button onclick="login()">로그인</button>
+  <div class="hint">admin/admin(관리자), 5355/5355(팀장), 9320/9320(일반직원) — 사번계정 초기비번=사번</div>
+  <div id="out-login" class="out"></div>
+</fieldset>
+<fieldset>
+  <legend>내 정보 / 비밀번호 변경</legend>
+  <button onclick="call('GET','/api/v1/auth/me',null,'out-me')">GET /auth/me</button>
+  <div id="out-me" class="out"></div>
+  <hr>
+  <label>현재 비번</label><input id="pwOld"><label>새 비번(8자+)</label><input id="pwNew" value="newpass123">
+  <button onclick="changePw()">비밀번호 변경</button>
+  <div id="out-pw" class="out"></div>
+</fieldset>
+
+<!-- ===== 헬스 ===== -->
+<h2>2. 헬스</h2>
+<fieldset>
+  <button onclick="call('GET','/api/v1/health',null,'out-health')">GET /health (공개)</button>
+  <div id="out-health" class="out"></div>
+</fieldset>
+
+<!-- ===== 집계 (핵심: 과거 데이터 수동 집계) ===== -->
+<h2>3. 집계 실행 (POST /aggregations) — 팀장·ADMIN</h2>
+<fieldset>
+  <legend>⭐ 과거/특정 월 수동 집계 (백필). 대시보드 데이터는 여기서 먼저 만들어야 나옴</legend>
+  <label>단일 월</label><input id="aggYm" value="202606" size="8">
+  <button onclick="aggRun()">이 달 집계</button>
+  &nbsp;&nbsp;<label>from</label><input id="aggFrom" value="202601" size="8"><label>to</label><input id="aggTo" value="202606" size="8">
+  <button onclick="aggRange()">기간 집계(여러 달)</button>
+  <button onclick="call('GET','/api/v1/aggregations',null,'out-agg')">실행 이력 GET</button>
+  <div class="hint">YYYYMM 형식. 같은 달 다시 돌려도 안전(덮어씀). 자동은 매일 02시(당월+전월).</div>
+  <div id="out-agg" class="out"></div>
+</fieldset>
+
+<!-- ===== 대시보드 위젯 ===== -->
+<h2>4. 대시보드 위젯 (조회) — 인증</h2>
+<fieldset>
+  <legend>① 월별 개발량 (GET /dev-volume) — SR 건수</legend>
+  <label>unit</label><input id="dvUnit" value="all" size="6">
+  <label>period</label><input id="dvPeriod" value="6m" size="4">
+  <label>unitId</label><input id="dvUnitId" size="10">
+  <button onclick="devVolume()">호출</button>
+  <div class="hint">unit=all(전사) | dept(부서: unitId=2139) | part(부서-파트: unitId=2139-P01) | dev(사번: unitId=7451). period=6m|12m</div>
+  <div id="out-dv" class="out"></div>
+</fieldset>
+<fieldset>
+  <legend>② 가용량/가동률 (GET /resource)</legend>
+  <label>period</label><input id="rYm" value="202606" size="8">
+  <label>unit</label><input id="rUnit" value="all" size="6">
+  <label>unitId</label><input id="rUnitId" size="10">
+  <button onclick="resource()">가동률</button>
+  <div class="hint">unit=all | dept(unitId=2139) | part(unitId=2139-P01). all은 unitId 불필요.</div>
+  <hr>
+  <label>야근 dept</label><input id="rDept" value="2139" size="6"><label>part</label><input id="rPart" size="8">
+  <button onclick="overtime()">야근 상세</button>
+  <div class="hint">/resource/overtime : dept만 or dept+part(예 dept=2139,part=P01). part만 주면 400.</div>
+  <div id="out-res" class="out"></div>
+</fieldset>
+<fieldset>
+  <legend>③ 주요 SR Top (GET /sr-projects)</legend>
+  <label>period</label><input id="spYm" value="202606" size="8">
+  <label>minMm</label><input id="spMin" value="0.6" size="4">
+  <label>type</label><input id="spType" size="4">
+  <label>page</label><input id="spPage" value="0" size="3">
+  <label>size</label><input id="spSize" value="5" size="3">
+  <button onclick="srProjects()">호출</button>
+  <div class="hint">minMm 계획공수 기준(기본 0.6). type=SR_TPCD(예 01 개발요청). 5개씩 페이징.</div>
+  <div id="out-sp" class="out"></div>
+</fieldset>
+
+<!-- ===== 공통코드 ===== -->
+<h2>5. 공통코드 (codes) — 조회는 인증 / 쓰기는 팀장·ADMIN</h2>
+<fieldset>
+  <legend>조회 (GET /codes?grpCd=)</legend>
+  <label>grpCd</label><input id="codeGrp" value="DEPT_CD">
+  <button onclick="call('GET','/api/v1/codes?grpCd='+enc(v('codeGrp')),null,'out-codeget')">조회</button>
+  <div class="hint">그룹: SR_TPCD, SR_CLS, EMP_ROLE, EMP_STATUS, DEPT_CD(부서), PART_CD(파트)</div>
+  <div id="out-codeget" class="out"></div>
+</fieldset>
+<fieldset>
+  <legend>등록/수정/삭제(비활성화)</legend>
+  <label>grpCd</label><input id="cGrp" value="TESTGRP"><label>cdVal</label><input id="cVal" value="01">
+  <label>cdNm</label><input id="cNm" value="테스트"><label>sortNo</label><input id="cSort" value="1" size="3">
+  <label>attr1</label><input id="cAttr" size="6">
+  <br>
+  <button onclick="codeCreate()">등록 POST</button>
+  <button onclick="codeUpdate()">수정 PUT</button>
+  <button onclick="codeDelete()">삭제(비활성) DELETE</button>
+  <div id="out-code" class="out"></div>
+</fieldset>
+
+<!-- ===== 인력 ===== -->
+<h2>6. 인력/인사 (developers) — 조회는 인증 / 쓰기는 팀장·ADMIN</h2>
+<fieldset>
+  <legend>조회</legend>
+  <label>part</label><input id="dPart" size="6"><label>devYn</label><input id="dDev" size="3"><label>status</label><input id="dStat" size="4">
+  <button onclick="devList()">목록 GET</button>
+  <label>사번</label><input id="dGetEmp" value="5355">
+  <button onclick="call('GET','/api/v1/developers/'+enc(v('dGetEmp')),null,'out-dev')">단건 GET</button>
+  <div class="hint">status=01(재직)/02(휴직), role/part는 공통코드(EMP_ROLE/PART_CD) 값</div>
+  <div id="out-dev" class="out"></div>
+</fieldset>
+<fieldset>
+  <legend>등록/수정/삭제</legend>
+  <label>사번</label><input id="eEmp" value="9999"><label>이름</label><input id="eNm" value="신입">
+  <label>부서</label><input id="eDept" value="2139"><label>파트</label><input id="ePart" value="P01">
+  <label>직급</label><input id="eGrade" value="사원"><label>역할</label><input id="eRole" value="03" size="3">
+  <label>개발Y/N</label><input id="eDev" value="Y" size="2"><label>상태</label><input id="eStat" value="01" size="3">
+  <br>
+  <button onclick="devCreate()">등록 POST</button>
+  <button onclick="devUpdate()">수정 PUT</button>
+  <button onclick="devDelete()">삭제 DELETE</button>
+  <div class="hint">부서/파트/역할/상태 비워도 등록됨(선택 필드). devYn·상태 미입력 시 Y·01 기본.</div>
+  <div id="out-devcrud" class="out"></div>
+</fieldset>
+
+<script>
+  document.getElementById('base').value = window.location.origin;
+  const $ = id => document.getElementById(id);
+  const v = id => $(id).value.trim();
+  const enc = encodeURIComponent;
+  const token = () => v('token');
+  function clearToken(){ $('token').value=''; $('who').textContent='미로그인'; }
+
+  async function call(method, path, body, outId){
+    const out = $(outId);
+    const headers = { 'Content-Type':'application/json' };
+    if (token()) headers['Authorization'] = 'Bearer ' + token();
+    try {
+      const res = await fetch(v('base') + path, { method, headers, body: body!=null ? JSON.stringify(body) : undefined });
+      const text = await res.text();
+      let pretty = text;
+      try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch(e){}
+      out.className = 'out ' + (res.ok ? 'ok' : 'err');
+      out.textContent = method + ' ' + path + '\n→ HTTP ' + res.status + '\n' + pretty;
+      return { res, text };
+    } catch (e) { out.className='out err'; out.textContent = method+' '+path+'\n→ 요청 실패: '+e; return {res:null}; }
+  }
+
+  async function login(){
+    const { res, text } = await call('POST','/api/v1/auth/login', { empno:v('loginEmpno'), password:v('loginPw') }, 'out-login');
+    if (res && res.ok) {
+      const d = JSON.parse(text).data;
+      $('token').value = d.token;
+      $('who').textContent = '로그인: '+d.name+' ('+d.roleName+') / pwdReset='+d.pwdResetRequired;
+      $('pwOld').value = v('loginPw');
+    }
+  }
+  function changePw(){ call('POST','/api/v1/auth/password',{ oldPassword:v('pwOld'), newPassword:v('pwNew') },'out-pw'); }
+
+  // 집계
+  function aggRun(){ call('POST','/api/v1/aggregations',{ periodYm:v('aggYm') },'out-agg'); }
+  function aggRange(){ call('POST','/api/v1/aggregations',{ from:v('aggFrom'), to:v('aggTo') },'out-agg'); }
+
+  // 위젯
+  function devVolume(){
+    let q='unit='+enc(v('dvUnit'))+'&period='+enc(v('dvPeriod'));
+    if (v('dvUnitId')) q+='&unitId='+enc(v('dvUnitId'));
+    call('GET','/api/v1/dev-volume?'+q, null,'out-dv');
+  }
+  function resource(){
+    let q='period='+enc(v('rYm'))+'&unit='+enc(v('rUnit'));
+    if (v('rUnitId')) q+='&unitId='+enc(v('rUnitId'));
+    call('GET','/api/v1/resource?'+q, null,'out-res');
+  }
+  function overtime(){
+    let q='period='+enc(v('rYm'));
+    if (v('rDept')) q+='&dept='+enc(v('rDept'));
+    if (v('rPart')) q+='&part='+enc(v('rPart'));
+    call('GET','/api/v1/resource/overtime?'+q, null,'out-res');
+  }
+  function srProjects(){
+    let q='period='+enc(v('spYm'))+'&minMm='+enc(v('spMin'))+'&page='+enc(v('spPage'))+'&size='+enc(v('spSize'));
+    if (v('spType')) q+='&type='+enc(v('spType'));
+    call('GET','/api/v1/sr-projects?'+q, null,'out-sp');
+  }
+
+  // 공통코드
+  function codeBody(){ return { grpCd:v('cGrp'), cdVal:v('cVal'), cdNm:v('cNm'), sortNo:v('cSort')?Number(v('cSort')):null, useYn:'Y', attr1:v('cAttr')||null }; }
+  function codeCreate(){ call('POST','/api/v1/codes', codeBody(),'out-code'); }
+  function codeUpdate(){ call('PUT','/api/v1/codes/'+enc(v('cGrp'))+'/'+enc(v('cVal')), codeBody(),'out-code'); }
+  function codeDelete(){ call('DELETE','/api/v1/codes/'+enc(v('cGrp'))+'/'+enc(v('cVal')), null,'out-code'); }
+
+  // 인력
+  function devList(){
+    let q=[];
+    if (v('dPart')) q.push('part='+enc(v('dPart')));
+    if (v('dDev')) q.push('devYn='+enc(v('dDev')));
+    if (v('dStat')) q.push('status='+enc(v('dStat')));
+    call('GET','/api/v1/developers'+(q.length?'?'+q.join('&'):''), null,'out-dev');
+  }
+  function devBody(){ return { empno:v('eEmp'), empNm:v('eNm'), deptCd:v('eDept')||null, partCd:v('ePart')||null, gradeCd:v('eGrade')||null, roleCd:v('eRole')||null, devYn:v('eDev'), statusCd:v('eStat') }; }
+  function devCreate(){ call('POST','/api/v1/developers', devBody(),'out-devcrud'); }
+  function devUpdate(){ call('PUT','/api/v1/developers/'+enc(v('eEmp')), devBody(),'out-devcrud'); }
+  function devDelete(){ call('DELETE','/api/v1/developers/'+enc(v('eEmp')), null,'out-devcrud'); }
+</script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+# syntax=docker/dockerfile:1
+# ──────────────────────────────────────────────────────────────────────────
+# 백엔드 단독 배포 이미지 (멀티스테이지).
+#   1) build  : 인터넷 되는 빌드 머신/CI 에서 실행 — gradle 로 실행가능 jar 생성(테스트 제외)
+#   2) runtime: 최종 이미지 — JRE + jar 만. 이걸 `docker save` 해서 폐쇄망으로 옮긴다.
+# Testcontainers/JUnit 은 test 스코프라 이미지에 애초에 포함되지 않는다.
+#
+# ⚠️ 사내 SSL 인터셉션(Somansa) 환경에서는 build 스테이지의 gradle 다운로드가
+#    'PKIX path building failed' 로 실패한다. 이 파일은 클린망/CI 전용이며,
+#    사내망에서 쓰려면 build 스테이지에 사내 CA 를 주입해야 한다. 예:
+#      COPY corp-ca.crt /tmp/corp-ca.crt
+#      RUN keytool -importcert -noprompt -trustcacerts -alias corp \
+#          -file /tmp/corp-ca.crt -cacerts -storepass changeit
+#    (사내 CA 없이 간편히 가려면 루트 기본 Dockerfile = 호스트빌드 방식 권장)
+# ──────────────────────────────────────────────────────────────────────────
+
+### 1) Build stage ###########################################################
+FROM eclipse-temurin:21-jdk-jammy AS build
+WORKDIR /workspace
+
+# 빌드 스크립트 먼저 복사(레이어 캐시: 소스만 바뀌면 의존성 재다운로드 안 함)
+COPY gradlew settings.gradle build.gradle ./
+COPY gradle ./gradle
+RUN chmod +x gradlew && ./gradlew --no-daemon --version
+
+# 소스 복사 후 테스트 제외(-x test)하고 실행가능 jar 생성
+COPY src ./src
+RUN ./gradlew --no-daemon clean bootJar -x test
+
+### 2) Runtime stage #########################################################
+FROM eclipse-temurin:21-jre-jammy AS runtime
+WORKDIR /app
+
+# 헬스체크용 curl 설치(빌드 머신은 인터넷 O — 최종 이미지에 baked in 되어 폐쇄망에선 불필요)
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# 비루트 실행 계정
+RUN groupadd --system app && useradd --system --gid app --home-dir /app app
+
+COPY --from=build /workspace/build/libs/*.jar /app/app.jar
+RUN chown -R app:app /app
+USER app
+
+EXPOSE 8080
+
+# 컨테이너 메모리에 맞춰 힙 자동 조정 + prod 프로파일 기본
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -Duser.timezone=Asia/Seoul"
+ENV SPRING_PROFILES_ACTIVE=prod
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=5 \
+  CMD curl -fsS http://localhost:8080/api/v1/health || exit 1
+
+ENTRYPOINT ["sh","-c","exec java $JAVA_OPTS -jar /app/app.jar"]

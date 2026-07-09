@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.app.DevVolumeMapper">
+
+  <select id="findSeries" resultType="com.meritz.dash.devvolume.DevVolumePoint">
+    SELECT d.PERIOD_YM                                                     AS periodYm,
+           SUBSTR(d.PERIOD_YM,3,2) || '.' || SUBSTR(d.PERIOD_YM,5,2)     AS monthLabel,
+           d.SR_CLS                                                        AS srCls,
+           NVL(c.CD_NM, d.SR_CLS)                                         AS srClsName,
+           SUM(d.SR_CNT)                                                   AS srCnt,
+           NVL(SUM(d.JOB_MM), 0)                                          AS jobMm
+      FROM DASH_DEV_AGG d
+      LEFT JOIN HR_DEVELOPER h ON d.EMPNO = h.EMPNO
+      LEFT JOIN CD_COMMON c ON c.GRP_CD = 'SR_CLS' AND c.CD_VAL = d.SR_CLS
+     WHERE d.PERIOD_YM &gt;= #{fromYm}
+       <if test="unitType == 'DEPT'">AND NVL(h.DEPT_CD, '미분류') = #{unitId}</if>
+       <if test="unitType == 'PART'">AND NVL(h.DEPT_CD, '미분류') || '-' || NVL(h.PART_CD, '미분류') = #{unitId}</if>
+       <if test="unitType == 'DEV'">AND d.EMPNO = #{unitId}</if>
+     GROUP BY d.PERIOD_YM, d.SR_CLS, c.CD_NM
+     ORDER BY d.PERIOD_YM, d.SR_CLS
+  </select>
+
+  <!-- 업무리더(02) 파트원 판정용: 사번의 소속 부서/파트 (재직 여부 무관 — STATUS_CD 필터 없음) -->
+  <select id="findDeptPartByEmpno" resultType="com.meritz.dash.devvolume.DevDeptPart">
+    SELECT h.DEPT_CD AS deptCd,
+           h.PART_CD AS partCd
+      FROM HR_DEVELOPER h
+     WHERE h.EMPNO = #{empno}
+  </select>
+
+</mapper>

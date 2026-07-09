@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- 환경변수 또는 기본값으로 로그 레벨 조정 -->
+    <springProperty scope="context" name="LOG_LEVEL"     source="LOG_LEVEL"     defaultValue="INFO"/>
+    <springProperty scope="context" name="APP_LOG_LEVEL" source="APP_LOG_LEVEL" defaultValue="INFO"/>
+
+    <property name="LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"/>
+
+    <!-- ── 콘솔 Appender ──────────────────────────────── -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ── 롤링 파일 Appender ─────────────────────────── -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/it-dash.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <!-- 일자 + 100MB 롤링 -->
+            <fileNamePattern>logs/it-dash.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <!-- 14일 보관 -->
+            <maxHistory>14</maxHistory>
+            <totalSizeCap>2GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ── 애플리케이션 패키지: DEBUG ─────────────────── -->
+    <logger name="com.meritz.dash" level="${APP_LOG_LEVEL}" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <!-- ── Root: INFO ────────────────────────────────── -->
+    <root level="${LOG_LEVEL}">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+
+</configuration>

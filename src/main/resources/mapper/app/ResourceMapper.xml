@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.app.ResourceMapper">
+
+  <select id="findUnit" resultType="com.meritz.dash.resource.ResourceRow">
+    SELECT PERIOD_YM        AS periodYm,
+           UNIT_TYPE        AS unitType,
+           UNIT_ID          AS unitId,
+           HEADCOUNT        AS headcount,
+           AVAIL_HEADCOUNT  AS availHeadcount,
+           AVAIL_MM         AS availMm,
+           USED_MM          AS usedMm,
+           OVERTIME_MM      AS overtimeMm
+      FROM DASH_RESOURCE
+     WHERE PERIOD_YM = #{period}
+       AND UNIT_TYPE = #{unitType}
+       AND UNIT_ID   = #{unitId}
+  </select>
+
+  <select id="findUnitRange" resultType="com.meritz.dash.resource.ResourceRow">
+    SELECT PERIOD_YM        AS periodYm,
+           UNIT_TYPE        AS unitType,
+           UNIT_ID          AS unitId,
+           HEADCOUNT        AS headcount,
+           AVAIL_HEADCOUNT  AS availHeadcount,
+           AVAIL_MM         AS availMm,
+           USED_MM          AS usedMm,
+           OVERTIME_MM      AS overtimeMm
+      FROM DASH_RESOURCE
+     WHERE PERIOD_YM BETWEEN #{from} AND #{to}
+       AND UNIT_TYPE = #{unitType}
+       AND UNIT_ID   = #{unitId}
+     ORDER BY PERIOD_YM
+  </select>
+
+  <!-- 사번별 야근 실적(분) — HR_OVERTIME(엑셀 업로드) 기준.
+       HR_DEVELOPER 를 LEFT JOIN 하여 이름/파트 표시(미등록 사번도 '미분류'로 노출).
+       dept/part/empno 는 역할 스코핑 결과(비ADMIN은 본인 부서/파트/사번으로 강제). -->
+  <select id="findOvertimeHoursByScope" resultType="com.meritz.dash.resource.OvertimeRow">
+    SELECT o.EMPNO                        AS empno,
+           NVL(h.EMP_NM, '미분류')        AS empNm,
+           NVL(h.PART_CD, '미분류')       AS partCd,
+           o.OT_MINUTES                   AS otMinutes
+      FROM HR_OVERTIME o
+      LEFT JOIN HR_DEVELOPER h ON o.EMPNO = h.EMPNO
+     WHERE o.PERIOD_YM = #{period}
+       <if test="empno != null and empno != ''">
+       AND o.EMPNO = #{empno}
+       </if>
+       <if test="dept != null and dept != ''">
+       AND NVL(h.DEPT_CD, '미분류') = #{dept}
+       </if>
+       <if test="part != null and part != ''">
+       AND NVL(h.PART_CD, '미분류') = #{part}
+       </if>
+     ORDER BY o.OT_MINUTES DESC, o.EMPNO
+  </select>
+
+  <!-- 스코프 내 재직 개발자 수 — 평균 야근시간(avgOvertimeHours) 분모 -->
+  <select id="countDevelopersByScope" resultType="int">
+    SELECT COUNT(*)
+      FROM HR_DEVELOPER h
+     WHERE h.STATUS_CD = '01'
+       AND h.DEV_YN = 'Y'
+       <if test="dept != null and dept != ''">
+       AND NVL(h.DEPT_CD, '미분류') = #{dept}
+       </if>
+       <if test="part != null and part != ''">
+       AND NVL(h.PART_CD, '미분류') = #{part}
+       </if>
+       <if test="empno != null and empno != ''">
+       AND h.EMPNO = #{empno}
+       </if>
+  </select>
+
+  <!-- 개발자별 사용 M/M — 재직 개발자(STATUS_CD='01', DEV_YN='Y') 기준.
+       DASH_DEV_AGG 를 해당 월로 LEFT JOIN 하여 SR 없는 개발자도 usedMm=0 으로 포함.
+       dept/part/empno 는 역할 스코핑 결과(비ADMIN은 본인 부서/파트/사번으로 강제). -->
+  <select id="findDeveloperUtil" resultType="com.meritz.dash.resource.DeveloperUtilRow">
+    SELECT h.EMPNO                     AS empno,
+           h.EMP_NM                    AS empNm,
+           NVL(h.DEPT_CD, '미분류')    AS deptCd,
+           NVL(h.PART_CD, '미분류')    AS partCd,
+           h.DEV_YN                    AS devYn,
+           NVL(SUM(d.JOB_MM), 0)       AS usedMm
+      FROM HR_DEVELOPER h
+      LEFT JOIN DASH_DEV_AGG d
+             ON d.EMPNO = h.EMPNO
+            AND d.PERIOD_YM = #{period}
+     WHERE h.STATUS_CD = '01'
+       AND h.DEV_YN = 'Y'
+       <if test="dept != null and dept != ''">
+       AND NVL(h.DEPT_CD, '미분류') = #{dept}
+       </if>
+       <if test="part != null and part != ''">
+       AND NVL(h.PART_CD, '미분류') = #{part}
+       </if>
+       <if test="empno != null and empno != ''">
+       AND h.EMPNO = #{empno}
+       </if>
+     GROUP BY h.EMPNO, h.EMP_NM, h.DEPT_CD, h.PART_CD, h.DEV_YN
+     ORDER BY usedMm DESC, h.EMPNO
+  </select>
+
+</mapper>

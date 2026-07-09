@@ -1,0 +1,18 @@
+# ──────────────────────────────────────────────────────────────────────────
+# 크로스 아키텍처 배포 이미지 (arm64 맥 → amd64 서버).
+# RUN 단계가 없어(에뮬레이션 불필요) 사내 SSL/크로스빌드 제약을 우회한다.
+# 아키텍처는 buildx 의 --platform 플래그로 지정한다(build-image.sh 가 처리).
+#   빌드: ./gradlew bootJar -x test
+#        docker buildx build --builder default --platform linux/amd64 --load \
+#              --provenance=false -f Dockerfile.amd64 -t it-dash:0.0.1 .
+# 주: 헬스체크는 curl 대신 bash /dev/tcp(패키지 설치 불필요), 컨테이너는 root 로 실행.
+# ──────────────────────────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jre-jammy
+WORKDIR /app
+COPY build/libs/*.jar /app/app.jar
+EXPOSE 8080
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -Duser.timezone=Asia/Seoul"
+ENV SPRING_PROFILES_ACTIVE=prod
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=5 \
+  CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' || exit 1
+ENTRYPOINT ["sh","-c","exec java $JAVA_OPTS -jar /app/app.jar"]

@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.app.DmlSrMapper">
+
+  <!-- 배치 스냅샷 upsert (ON SR_NO). 점검/개선(DASH_DML_CHECK)은 건드리지 않는다 — 멱등·보존. -->
+  <update id="mergeSnapshot">
+    MERGE INTO DASH_DML_SR t
+    USING (SELECT #{srNo} SR_NO FROM DUAL) s ON (t.SR_NO = s.SR_NO)
+    WHEN MATCHED THEN UPDATE SET
+       BASE_YM=#{baseYm}, SR_TPCD=#{srTpcd}, SR_TPCD_NAME=#{srTpcdName}, BSWR_DETL_NAME=#{bswrDetlName},
+       SR_REG_STAT_CODE=#{statusCode}, TITL_CNTT=#{titlCntt}, MSG_CNTT=#{msgCntt}, CUST_INFO_YN=#{custInfoYn},
+       RQSR_EMPNO=#{rqsrEmpno}, RQSR_NM=#{rqsrNm}, RQSR_DPCD=#{rqsrDpcd},
+       TRTH_RQST_NM=#{trthRqstNm}, TRTH_RQST_DPCD=#{trthRqstDpcd},
+       PIC_EMPNO=#{picEmpno}, PIC_NM=#{picNm}, PIC_DPCD=#{picDpcd}, PIC_DPNM=#{picDpnm},
+       DEV_DEPT_CD=#{devDeptCd}, DEV_PART_CD=#{devPartCd},
+       REG_DATE=#{regDate}, RFLC_SCDL_DATE=#{rflcScdlDate}, PROS_CMPT_DATE=#{prosCmptDate},
+       SYNCED_AT=SYSTIMESTAMP, UPDATED_AT=SYSTIMESTAMP, UPDATED_BY='BATCH'
+    WHEN NOT MATCHED THEN INSERT
+       (SR_NO,BASE_YM,SR_TPCD,SR_TPCD_NAME,BSWR_DETL_NAME,SR_REG_STAT_CODE,TITL_CNTT,MSG_CNTT,CUST_INFO_YN,
+        RQSR_EMPNO,RQSR_NM,RQSR_DPCD,TRTH_RQST_NM,TRTH_RQST_DPCD,PIC_EMPNO,PIC_NM,PIC_DPCD,PIC_DPNM,
+        DEV_DEPT_CD,DEV_PART_CD,REG_DATE,RFLC_SCDL_DATE,PROS_CMPT_DATE,SYNCED_AT,CREATED_BY)
+       VALUES (#{srNo},#{baseYm},#{srTpcd},#{srTpcdName},#{bswrDetlName},#{statusCode},#{titlCntt},#{msgCntt},#{custInfoYn},
+        #{rqsrEmpno},#{rqsrNm},#{rqsrDpcd},#{trthRqstNm},#{trthRqstDpcd},#{picEmpno},#{picNm},#{picDpcd},#{picDpnm},
+        #{devDeptCd},#{devPartCd},#{regDate},#{rflcScdlDate},#{prosCmptDate},SYSTIMESTAMP,'BATCH')
+  </update>
+
+  <!-- 스냅샷 + 점검/개선 LEFT JOIN 목록. 점검/개선 행이 없으면 Y/N 플래그는 'N', 나머지 null. -->
+  <select id="selectList" resultType="com.meritz.dash.dml.DmlSrItem">
+    SELECT t.SR_NO            AS srNo,
+           t.BASE_YM          AS baseYm,
+           t.SR_TPCD          AS srTpcd,
+           t.SR_TPCD_NAME     AS srTpcdName,
+           t.BSWR_DETL_NAME   AS bswrDetlName,
+           t.SR_REG_STAT_CODE AS statusCode,
+           t.TITL_CNTT        AS titlCntt,
+           t.MSG_CNTT         AS msgCntt,
+           t.CUST_INFO_YN     AS custInfoYn,
+           t.RQSR_NM          AS rqsrNm,
+           t.RQSR_DPCD        AS rqsrDpcd,
+           t.TRTH_RQST_NM     AS trthRqstNm,
+           t.TRTH_RQST_DPCD   AS trthRqstDpcd,
+           t.PIC_EMPNO        AS picEmpno,
+           t.PIC_NM           AS picNm,
+           t.PIC_DPNM         AS picDpnm,
+           t.DEV_DEPT_CD      AS devDeptCd,
+           t.DEV_PART_CD      AS devPartCd,
+           t.REG_DATE         AS regDate,
+           t.RFLC_SCDL_DATE   AS rflcScdlDate,
+           t.PROS_CMPT_DATE   AS prosCmptDate,
+           NVL(k.CHECK_YN,'N')   AS checkYn,
+           NVL(k.IMPROVE_YN,'N') AS improveYn,
+           k.IMPROVE_PLAN     AS improvePlan,
+           k.PLAN_CMPT_DATE   AS planCmptDate,
+           NVL(k.CMPT_YN,'N') AS cmptYn,
+           k.REMARK           AS remark
+      FROM DASH_DML_SR t
+      LEFT JOIN DASH_DML_CHECK k ON t.SR_NO = k.SR_NO
+     WHERE t.BASE_YM = #{baseYm}
+     <if test="deptCd != null"> AND t.DEV_DEPT_CD = #{deptCd}</if>
+     <if test="partCd != null"> AND t.DEV_PART_CD = #{partCd}</if>
+     <if test="empno != null"> AND t.PIC_EMPNO = #{empno}</if>
+     <if test="checked != null"> AND NVL(k.CHECK_YN,'N') = #{checked}</if>
+     <if test="improved != null"> AND NVL(k.IMPROVE_YN,'N') = #{improved}</if>
+     ORDER BY t.SR_NO
+  </select>
+
+  <!-- 쓰기 RBAC 판정용 스코프 참조. 없으면 null. -->
+  <select id="findScopeRef" resultType="com.meritz.dash.mapper.app.DmlSrMapper$ScopeRef">
+    SELECT SR_NO       AS srNo,
+           DEV_DEPT_CD AS devDeptCd,
+           DEV_PART_CD AS devPartCd,
+           PIC_EMPNO   AS picEmpno
+      FROM DASH_DML_SR
+     WHERE SR_NO = #{srNo}
+  </select>
+
+  <!-- 점검 여부 upsert. -->
+  <update id="upsertCheck">
+    MERGE INTO DASH_DML_CHECK t
+    USING (SELECT #{srNo} SR_NO FROM DUAL) s ON (t.SR_NO = s.SR_NO)
+    WHEN MATCHED THEN UPDATE SET
+       CHECK_YN=#{checkYn}, UPDATED_AT=SYSTIMESTAMP, UPDATED_BY=#{actor}
+    WHEN NOT MATCHED THEN INSERT
+       (SR_NO, CHECK_YN, CREATED_BY, UPDATED_BY)
+       VALUES (#{srNo}, #{checkYn}, #{actor}, #{actor})
+  </update>
+
+  <!-- 개선대상여부(IMPROVE_YN) 토글 upsert — 점검 화면에서 개선건으로 올림/내림. -->
+  <update id="upsertImproveTarget">
+    MERGE INTO DASH_DML_CHECK t
+    USING (SELECT #{srNo} SR_NO FROM DUAL) s ON (t.SR_NO = s.SR_NO)
+    WHEN MATCHED THEN UPDATE SET
+       IMPROVE_YN=#{improveYn}, UPDATED_AT=SYSTIMESTAMP, UPDATED_BY=#{actor}
+    WHEN NOT MATCHED THEN INSERT
+       (SR_NO, IMPROVE_YN, CREATED_BY, UPDATED_BY)
+       VALUES (#{srNo}, #{improveYn}, #{actor}, #{actor})
+  </update>
+
+  <!-- 개선건 등록/갱신 upsert — IMPROVE_YN='Y' 고정. -->
+  <update id="upsertImprovement">
+    MERGE INTO DASH_DML_CHECK t
+    USING (SELECT #{srNo} SR_NO FROM DUAL) s ON (t.SR_NO = s.SR_NO)
+    WHEN MATCHED THEN UPDATE SET
+       IMPROVE_YN='Y',
+       IMPROVE_PLAN=#{improvePlan,jdbcType=VARCHAR},
+       PLAN_CMPT_DATE=#{planCmptDate,jdbcType=VARCHAR},
+       CMPT_YN=#{cmptYn},
+       REMARK=#{remark,jdbcType=VARCHAR},
+       UPDATED_AT=SYSTIMESTAMP, UPDATED_BY=#{actor}
+    WHEN NOT MATCHED THEN INSERT
+       (SR_NO, CHECK_YN, IMPROVE_YN, IMPROVE_PLAN, PLAN_CMPT_DATE, CMPT_YN, REMARK, CREATED_BY, UPDATED_BY)
+       VALUES (#{srNo}, 'N', 'Y', #{improvePlan,jdbcType=VARCHAR}, #{planCmptDate,jdbcType=VARCHAR},
+        #{cmptYn}, #{remark,jdbcType=VARCHAR}, #{actor}, #{actor})
+  </update>
+
+</mapper>

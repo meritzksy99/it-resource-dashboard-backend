@@ -1,0 +1,19 @@
+# ============================================================================
+# [배포 서버] docker compose 로 실행하는 경우(선택 — docker run 대신).
+#   docker compose up -d        # 실행
+#   docker compose logs -f      # 로그
+#   docker compose down         # 중지/삭제
+# 사전: 같은 폴더에 it-dash.env 작성, 이미지 적재(gunzip -c it-dash-0.0.1.tar.gz | docker load)
+# ============================================================================
+services:
+  it-dash:
+    image: it-dash:0.0.1
+    container_name: it-dash
+    restart: unless-stopped
+    ports:
+      - "8080:8080"          # "원하는외부포트:8080" 으로 변경 가능 (예: "9090:8080")
+    env_file:
+      - it-dash.env
+    # ── tnsnames.ora 방식이면 주석 해제: 폴더 마운트 + it-dash.env 에 ORACLE_NET_TNS_ADMIN=/tnsadmin ──
+    # volumes:
+    #   - ./tnsadmin:/tnsadmin:ro

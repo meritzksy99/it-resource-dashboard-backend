@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.app.CodeMapper">
+
+  <select id="findByGroup" resultType="com.meritz.dash.code.CommonCode">
+    SELECT GRP_CD AS grpCd, CD_VAL AS cdVal, CD_NM AS cdNm, SORT_NO AS sortNo
+      FROM CD_COMMON
+     WHERE GRP_CD = #{grpCd}
+       AND USE_YN = 'Y'
+     ORDER BY SORT_NO
+  </select>
+
+  <select id="findOne" resultType="com.meritz.dash.code.CommonCode">
+    SELECT GRP_CD AS grpCd, CD_VAL AS cdVal, CD_NM AS cdNm, SORT_NO AS sortNo
+      FROM CD_COMMON
+     WHERE GRP_CD = #{grpCd}
+       AND CD_VAL = #{cdVal}
+  </select>
+
+  <insert id="insert">
+    INSERT INTO CD_COMMON
+      (GRP_CD, CD_VAL, CD_NM, SORT_NO, USE_YN, ATTR1,
+       CREATED_AT, CREATED_BY, UPDATED_AT, UPDATED_BY)
+    VALUES
+      (#{grpCd}, #{cdVal}, #{cdNm}, #{sortNo}, #{useYn}, #{attr1,jdbcType=VARCHAR},
+       SYSTIMESTAMP, 'SYSTEM', SYSTIMESTAMP, 'SYSTEM')
+  </insert>
+
+  <update id="update">
+    UPDATE CD_COMMON
+       SET CD_NM      = #{cdNm},
+           SORT_NO    = #{sortNo},
+           USE_YN     = #{useYn},
+           ATTR1      = #{attr1,jdbcType=VARCHAR},
+           UPDATED_AT = SYSTIMESTAMP,
+           UPDATED_BY = #{updatedBy}
+     WHERE GRP_CD = #{grpCd}
+       AND CD_VAL = #{cdVal}
+  </update>
+
+  <select id="findUseYn" resultType="string">
+    SELECT USE_YN
+      FROM CD_COMMON
+     WHERE GRP_CD = #{grpCd}
+       AND CD_VAL = #{cdVal}
+  </select>
+
+  <update id="softDelete">
+    UPDATE CD_COMMON
+       SET USE_YN     = 'N',
+           UPDATED_AT = SYSTIMESTAMP,
+           UPDATED_BY = #{updatedBy}
+     WHERE GRP_CD = #{grpCd}
+       AND CD_VAL = #{cdVal}
+  </update>
+
+</mapper>

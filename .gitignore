@@ -1,0 +1,36 @@
+# Java / Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+gradle.properties
+
+# OS / IDE
+.DS_Store
+.idea/
+*.iml
+.vscode/
+
+# SDD scratch
+.superpowers/
+
+# Secrets / local
+*.local.yml
+*.env
+
+# 런타임 로그
+logs/
+
+# 배포 이미지 아티팩트(대용량)
+deploy/*.tar.gz
+
+# 사외 반출 금지(민감/내부 자료) — GitHub 공개 스냅샷 제외
+ad계정설정.txt
+deploy.zip
+/prd/
+/쿼리/
+보안성검토*.xlsx
+SR유형코드정보*.xlsx
+*.tar
+*.tar.gz
+deploy/tar_백업/
+deploy/**/*.tar.gz

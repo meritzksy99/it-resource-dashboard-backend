@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.app.SrProjectMapper">
+  <sql id="cond">
+    PERIOD_YM = #{period} AND TOT_MM &gt;= #{minMm}
+    <if test="type != null and type != ''">AND SR_TPCD = #{type}</if>
+  </sql>
+  <select id="findTop" resultType="com.meritz.dash.srproject.SrProjectView">
+    SELECT SR_NO AS srNo, TITL_CNTT AS titlCntt, SR_TPCD AS srTpcd, SR_TPCD_NAME AS srTpcdName,
+           TOT_MM AS totMm, EMP_CNT AS empCnt, PRCH_DPCD AS prchDpcd, DPCD AS dpcd
+      FROM DASH_SR_PROJECT WHERE <include refid="cond"/>
+     ORDER BY TOT_MM DESC
+     OFFSET #{offset} ROWS FETCH NEXT #{size} ROWS ONLY
+  </select>
+  <select id="countTop" resultType="int">
+    SELECT COUNT(*) FROM DASH_SR_PROJECT WHERE <include refid="cond"/>
+  </select>
+</mapper>
