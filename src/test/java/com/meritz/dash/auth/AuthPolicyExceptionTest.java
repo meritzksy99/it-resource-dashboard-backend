@@ -17,6 +17,12 @@ class AuthPolicyExceptionTest {
         assertThat(ex.errorCode()).isEqualTo("INVALID_CREDENTIALS");
         assertThat(ex.properties()).containsEntry("remainingAttempts", 3);
     }
+    @Test void password_reset_required_is_403_with_code() {
+        AuthPolicyException ex = AuthPolicyException.passwordResetRequired();
+        assertThat(ex.httpStatus()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(ex.errorCode()).isEqualTo("PASSWORD_RESET_REQUIRED");
+        assertThat(ex.getMessage()).isEqualTo("비밀번호를 먼저 변경해야 합니다");
+    }
     @Test void reuse_is_400() {
         assertThat(AuthPolicyException.reuse().httpStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(AuthPolicyException.reuse().errorCode()).isEqualTo("PASSWORD_REUSE");

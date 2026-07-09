@@ -29,6 +29,10 @@ public class AuthPolicyException extends RuntimeException {
         return new AuthPolicyException(HttpStatus.FORBIDDEN, "ACCOUNT_DORMANT",
                 "휴면 계정입니다. 관리자에게 문의하세요", Map.of());
     }
+    public static AuthPolicyException passwordResetRequired() {
+        return new AuthPolicyException(HttpStatus.FORBIDDEN, "PASSWORD_RESET_REQUIRED",
+                "비밀번호를 먼저 변경해야 합니다", Map.of());
+    }
     public static AuthPolicyException policyViolation(String message) {
         return new AuthPolicyException(HttpStatus.BAD_REQUEST, "PASSWORD_POLICY_VIOLATION", message, Map.of());
     }

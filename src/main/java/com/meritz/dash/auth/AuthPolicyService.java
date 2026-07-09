@@ -20,6 +20,13 @@ import java.util.stream.Collectors;
 @Service
 public class AuthPolicyService {
 
+    /**
+     * 계정 열거(enumeration) 방지용 더미 BCrypt 해시.
+     * 존재하지 않는 사번이어도 실제 계정과 동일한 BCrypt 연산을 수행해 응답 시간을 균일화한다.
+     * (문법상 유효한 60자 해시면 충분 — 어떤 비밀번호와도 매칭될 필요 없음)
+     */
+    private static final String DUMMY_HASH = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
+
     private final AuthAccountMapper accounts;
     private final DeveloperMapper developers;
     private final CodeMapper codes;
@@ -52,7 +59,10 @@ public class AuthPolicyService {
 
         AuthAccount acc = accounts.findByEmpno(req.empno());
         if (acc == null) {
-            throw AuthPolicyException.invalidCredentials(props.lockout().maxFail());
+            // 타이밍 균일화: 실제 계정과 동일하게 BCrypt 비교 수행(결과 무시)
+            encoder.matches(req.password(), DUMMY_HASH);
+            // 실제 계정의 첫 실패와 동일한 remainingAttempts(max-1) — 계정 존재 여부 노출 방지
+            throw AuthPolicyException.invalidCredentials(props.lockout().maxFail() - 1);
         }
         // 잠금/휴면 선차단
         if ("01".equals(acc.statusCd())) throw AuthPolicyException.locked();
@@ -74,7 +84,8 @@ public class AuthPolicyService {
         }
         Developer dev = developers.findByEmpno(req.empno());
         if (dev == null) {
-            throw AuthPolicyException.invalidCredentials(props.lockout().maxFail());
+            // 비밀번호 비교는 이미 수행됨 — remainingAttempts만 균일화(max-1)
+            throw AuthPolicyException.invalidCredentials(props.lockout().maxFail() - 1);
         }
         accounts.loginSuccess(req.empno());
         boolean pwdReset = "Y".equals(acc.pwdResetYn()) || policy.isExpired(acc.passwordChangedAt());

@@ -29,6 +29,14 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
         String deptCd = (String) claims.get("deptCd");
         String partCd = (String) claims.get("partCd");
 
+        // 비밀번호 변경이 강제된 토큰(pwdReset=true)은 본인 계정 경로만 허용
+        Boolean pwdReset = claims.get("pwdReset", Boolean.class);
+        String uri = req.getRequestURI();
+        boolean selfAccountAllowed = uri.endsWith("/auth/password") || uri.endsWith("/auth/me");
+        if (Boolean.TRUE.equals(pwdReset) && !selfAccountAllowed) {
+            throw AuthPolicyException.passwordResetRequired();
+        }
+
         Auth auth = hm.getMethodAnnotation(Auth.class);
         if (auth == null) auth = hm.getBeanType().getAnnotation(Auth.class);
         if (auth != null && auth.roles().length > 0

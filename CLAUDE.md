@@ -154,3 +154,12 @@ SqlSessionFactory · TxManager · `@MapperScan`(`mapper.legacy` / `mapper.app`) 
 커맨드(`.claude/commands/`): `/tdd-feature`, `/review-all`
 
 메인 세션은 오케스트레이터로서 TDD 순서를 지키고, 구현 후 `/review-all`을 돌린다.
+
+---
+
+## 11. 커밋 컨벤션 (MUST)
+
+**Conventional Commits**를 따른다. 상세/예시는 `CONTRIBUTING.md`.
+- 형식: `<타입>: <제목>` (+ 선택 본문/푸터). 타입: `feat|fix|refactor|perf|test|docs|chore|style`. 스코프 허용(예: `feat(auth): ...`).
+- 제목은 **50자 이내·마침표 없이·한글**로 "무엇을 왜" 했는지.
+- **하나의 커밋 = 하나의 논리적 변경.** 이슈 있으면 푸터에 `Closes #번호`.

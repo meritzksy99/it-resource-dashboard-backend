@@ -29,14 +29,49 @@ class AuthorizationIT extends AbstractOracleIT {
         // admin_can_write 테스트가 E9999를 삽입할 수 있으므로 반드시 정리
         // 다른 IT의 HR 카운트 단언(4건) 보호
         jdbc.update("DELETE FROM HR_DEVELOPER WHERE EMPNO = 'E9999'");
+        // login()이 해제한 초기화 플래그 원복 — 다른 IT의 pwdResetRequired=true 단언 보호
+        jdbc.update("UPDATE AUTH_ACCOUNT SET PWD_RESET_YN = 'Y' WHERE EMPNO IN ('E0001','E0002')");
     }
 
+    /**
+     * 인가(역할) 검증용 토큰 발급. pwdReset=true 토큰은 업무 API가
+     * PASSWORD_RESET_REQUIRED로 차단되므로, 초기화 플래그를 해제한 뒤 로그인한다.
+     * (플래그는 cleanup()에서 'Y'로 원복 — 비밀번호 자체는 바꾸지 않아 다른 IT에 영향 없음)
+     */
     private String login(String empno) {
+        jdbc.update("UPDATE AUTH_ACCOUNT SET PWD_RESET_YN = 'N' WHERE EMPNO = ?", empno);
         ResponseEntity<String> r = rest.postForEntity("/api/v1/auth/login",
             Map.of("empno", empno, "password", empno), String.class);
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
         String body = r.getBody();
         return body.replaceAll("(?s).*\"token\":\"([^\"]+)\".*", "$1");
+    }
+
+    /** 초기 상태(비번=사번, PWD_RESET_YN='Y') 그대로 로그인 → pwdReset=true 토큰 */
+    private String loginWithResetFlag(String empno) {
+        ResponseEntity<String> r = rest.postForEntity("/api/v1/auth/login",
+            Map.of("empno", empno, "password", empno), String.class);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
+        return r.getBody().replaceAll("(?s).*\"token\":\"([^\"]+)\".*", "$1");
+    }
+
+    @Test
+    @DisplayName("pwdReset=true 토큰으로 업무 API → 403 PASSWORD_RESET_REQUIRED")
+    void pwd_reset_token_blocked_on_business_api() {
+        HttpHeaders h = new HttpHeaders();
+        h.setBearerAuth(loginWithResetFlag("E0001"));
+        ResponseEntity<String> r = rest.exchange("/api/v1/developers", HttpMethod.GET, new HttpEntity<>(h), String.class);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(r.getBody()).contains("PASSWORD_RESET_REQUIRED");
+    }
+
+    @Test
+    @DisplayName("pwdReset=true 토큰으로 /auth/me → 200(본인 계정 경로 허용)")
+    void pwd_reset_token_allowed_on_me() {
+        HttpHeaders h = new HttpHeaders();
+        h.setBearerAuth(loginWithResetFlag("E0002"));
+        ResponseEntity<String> r = rest.exchange("/api/v1/auth/me", HttpMethod.GET, new HttpEntity<>(h), String.class);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test
