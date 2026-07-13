@@ -22,7 +22,8 @@ import java.util.Set;
  *   <li><b>점검 대상</b> {@link #inspections}: 로그인 사용자의 <b>본인 파트</b>(팀장/ADMIN은 파트 지정) — 점검여부 토글용.</li>
  *   <li><b>개선 대상</b> {@link #improvements}: 위 스코프 중 <b>점검완료(CHECK_YN='Y')</b> 건 — 개선 내용 등록용.</li>
  * </ol>
- * 쓰기(점검/개선)는 대상 SR 의 DEV_DEPT_CD/DEV_PART_CD 기준 fail-closed 판정 — 03 은 쓰기 불가.
+ * 쓰기(점검/개선)는 대상 SR 의 DEV_DEPT_CD/DEV_PART_CD 기준 fail-closed 판정
+ * — 02/03 은 본인 부서+파트 건만, 01 은 본인 부서 건만, ADMIN 은 전체. 수동 동기화만 01·ADMIN 전용.
  */
 @Service
 public class DmlSrService {
@@ -148,9 +149,6 @@ public class DmlSrService {
     // ── 쓰기 RBAC (fail-closed) ─────────────────────────────────────
     private void assertCanWrite(String srNo) {
         String role = AuthContext.role();
-        if ("03".equals(role)) {
-            throw new ForbiddenException("점검/개선 입력 권한이 없습니다");
-        }
         ScopeRef ref = mapper.findScopeRef(srNo);
         if (ref == null) {
             throw new NotFoundException("해당 SR을 찾을 수 없습니다: " + srNo);
@@ -165,7 +163,7 @@ public class DmlSrService {
             }
             return;
         }
-        if ("02".equals(role)) {                                   // 업무리더: 본인 부서+파트 건만
+        if ("02".equals(role) || "03".equals(role)) {              // 업무리더/일반직원: 본인 부서+파트 건만
             // 파트코드(P01 등)는 부서 간 재사용되므로 부서까지 함께 비교(교차 부서 권한상승 방지).
             String dept = AuthContext.deptCd();
             String part = AuthContext.partCd();

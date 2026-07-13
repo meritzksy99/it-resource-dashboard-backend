@@ -7,20 +7,13 @@ app:
     outsourcing-dept-cd: '9000'
   dml-sync:
     cron: ${DML_SYNC_CRON:0 0 3 * * MON}
-  jwt:
-    secret: ${JWT_SECRET:change-me-in-prod-please-32bytes-minimum!!}
-    expiration: ${JWT_EXPIRATION:86400000}
-  admin:
-    # !! 운영 환경에서는 반드시 환경 변수 ADMIN_USERNAME / ADMIN_PASSWORD 로 교체하십시오 !!
-    username: ${ADMIN_USERNAME:admin}
-    password: ${ADMIN_PASSWORD:admin}
-  auth:
-    password:
-      min-length: ${AUTH_PWD_MIN_LENGTH:8}
-      max-age-days: ${AUTH_PWD_MAX_AGE_DAYS:90}
-    lockout:
-      max-fail: ${AUTH_LOCKOUT_MAX_FAIL:10}
-    dormant-days: ${AUTH_DORMANT_DAYS:90}
+  gateway:
+    enabled: ${GATEWAY_AUTH_ENABLED:true}
+    token-header: ${GATEWAY_TOKEN_HEADER:X-Access-Token}
+    jwks-url: ${GATEWAY_JWKS_URL:http://172.17.172.125/realms/meritz-internal/protocol/openid-connect/certs}
+    issuer: ${GATEWAY_ISSUER:http://172.17.172.125/realms/meritz-internal}
+    audience: ${GATEWAY_AUDIENCE:oauth2-proxy}
+    allowed-roles: ${GATEWAY_ALLOWED_ROLES:dev-user}   # 우리 서비스 허용 게이트웨이 role — 미확정, 운영팀 확인 필요
 
 spring:
   application:
@@ -41,6 +34,11 @@ spring:
 server:
   address: 0.0.0.0
   port: 8080
+  # 게이트웨이(리버스 프록시) 뒤에서 X-Forwarded-Host/Proto/Prefix 존중 —
+  # springdoc 서버 URL·리다이렉트가 백엔드 내부 주소가 아닌 외부(게이트웨이) 주소로 생성되게 함(CORS 방지).
+  forward-headers-strategy: framework
+  servlet:
+    context-path: ${SERVER_CONTEXT_PATH:}   # 운영팀 발급 경로명(예: /dml-grant). local은 빈값. 미확정 — 운영팀 확인 필요
 datasource:
   app:
     jdbc-url: jdbc:oracle:thin:@localhost:1521/FREEPDB1

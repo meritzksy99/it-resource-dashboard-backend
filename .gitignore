@@ -22,3 +22,4 @@ logs/
 
 # 배포 이미지 아티팩트(대용량)
 deploy/*.tar.gz
+.worktrees/

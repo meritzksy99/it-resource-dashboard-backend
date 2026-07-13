@@ -4,6 +4,15 @@
 # 모든 DB 접속정보/시크릿은 환경변수로 주입한다(기본값 없음 → 미설정 시 기동 실패=안전).
 # base application.yml 의 나머지 설정(app.mm, springdoc 등)은 그대로 상속된다.
 # ──────────────────────────────────────────────────────────────────────────
+app:
+  gateway:
+    # 운영 고정 — env로 끌 수 없음(dev 우회 금지). enabled=false 는 local 전용.
+    enabled: true
+    # 필수 env(기본값 없음 → 미설정 시 기동 실패). base 의 개발 게이트웨이 기본값 오연결 방지.
+    jwks-url: ${GATEWAY_JWKS_URL}
+    issuer: ${GATEWAY_ISSUER}
+    # audience/allowed-roles/token-header 는 base 기본값 상속(필요 시 env로 오버라이드).
+
 spring:
   flyway:
     # 대상 app DB(HR/DASH 테이블)에 마이그레이션 적용 여부.
@@ -35,12 +44,3 @@ datasource:
     data-source-properties:
       oracle.jdbc.ReadTimeout: 5000
       oracle.net.CONNECT_TIMEOUT: 3000
-
-app:
-  jwt:
-    # 최소 32바이트 랜덤 시크릿. 기본값 없음 → 미설정 시 기동 실패.
-    secret: ${JWT_SECRET}
-    expiration: ${JWT_EXPIRATION:86400000}
-  admin:
-    username: ${ADMIN_USERNAME}
-    password: ${ADMIN_PASSWORD}

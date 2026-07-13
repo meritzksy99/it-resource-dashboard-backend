@@ -11,6 +11,7 @@
   - 로컬: `http://localhost:8080/api/v1`
   - 같은 WiFi의 다른 PC: `http://172.22.51.226:8080/api/v1` (서버 PC의 IP)
 - **Swagger UI**(브라우저에서 직접 테스트): `http://<서버IP>:8080/swagger-ui/index.html`
+  - **Swagger UI/OpenAPI 문서(`/swagger-ui`, `/v3/api-docs`)는 ADMIN 역할만 접근 가능**(보안팀 요청). 토큰 무효=401, 비ADMIN=403.
 - **성공 응답 형태(envelope)** — 모든 API 공통:
   ```json
   { "data": <실제 데이터>, "meta": <목록 정보 등 부가정보 or null> }
@@ -22,86 +23,39 @@
   ```
   프론트에서는 `status`로 분기(400 검증실패 / 401 미인증 / 403 권한없음 / 404 없음)하고, `detail`을 사용자 메시지로 쓰면 됩니다.
 
-### 인증(로그인)이 필요한가?
+### 인증이 필요한가? (게이트웨이 인증 — 자체 로그인 없음)
 | 구분 | 대상 | 토큰 |
 |---|---|---|
-| **공개** | `/health`, `/auth/login`, Swagger | 불필요 |
-| **인증 필요**(로그인만 되면 OK) | 모든 조회(GET) — codes, developers, dev-volume, resource, sr-projects, aggregations(이력), `/auth/me`, `/auth/password` | 필요 |
+| **공개** | `/health` | 불필요 |
+| **ADMIN만** | Swagger UI, `/v3/api-docs` (보안팀 요청) | 필요 + ADMIN 역할 |
+| **인증 필요** | 모든 조회(GET) — codes, developers, dev-volume, resource, sr-projects, aggregations(이력), `/auth/me` | 필요 |
 | **팀장 또는 ADMIN만** | 쓰기 — developers(POST/PUT/DELETE), codes(POST/PUT/DELETE), aggregations(POST 집계실행) | 필요 + 역할 |
 
-- **역할 코드**: `01`=팀장, `02`=업무리더, `03`=일반직원, `ADMIN`=관리자 계정
-- **토큰 붙이는 법**: 로그인으로 받은 `token`을 모든 요청 헤더에 `Authorization: Bearer <token>` 로 첨부.
-- **Swagger에서**: 우측 상단 `Authorize` 버튼 → `Bearer <token>` 입력하면 이후 호출에 자동 첨부.
+- **로그인 API가 없다.** 인증은 사내 **게이트웨이(Keycloak/AD)** 가 담당한다:
+  - **브라우저로 게이트웨이 경유 접속** 시 게이트웨이가 AD 로그인 후 `X-Access-Token` 헤더를 **자동으로 붙여준다** — 프론트가 토큰을 저장/첨부할 필요 없음.
+  - **API를 직접 호출**(게이트웨이 밖에서 curl/Postman 등)할 때만 요청 헤더에 `X-Access-Token: <게이트웨이 발급 토큰>` 을 직접 첨부.
+- **역할 코드**(HR_DEVELOPER.ROLE_CD): `01`=팀장, `02`=업무리더, `03`=일반직원, `ADMIN`=관리자
+- **401 vs 403 의미**:
+  - **401** — 토큰 무효(헤더 없음/서명·issuer·audience 불일치/만료). 게이트웨이 경유 재접속(재로그인) 필요.
+  - **403** — 토큰은 유효하나 권한 없음: 게이트웨이 role 미허용 / HR(HR_DEVELOPER) 미등록 사번 / `@Auth` 역할 불충족(예: 일반직원이 쓰기 API 호출).
 
 ---
 
 ## 1. 인증 (Auth)
 
-### 1-1. 로그인 — `POST /api/v1/auth/login` 🔓공개
+로그인/비밀번호 API는 **없다**. 인증은 게이트웨이(Keycloak/AD)가 수행하고, 백엔드는 `X-Access-Token`을 검증한다(0장 참고). 남은 엔드포인트는 `/auth/me` 하나.
 
-로그인해서 JWT 토큰을 받습니다. **ID=사번, 초기 비밀번호=사번**(첫 로그인 시 변경 필요). 관리자는 `admin`/`admin`.
+### 1-1. 내 정보 — `GET /api/v1/auth/me` 🔒인증
 
-**요청**
-```json
-{ "empno": "E0001", "password": "E0001" }
-```
+현재 사용자(토큰 소유자)의 HR 정보를 반환(헤더 이름 표시, 권한 확인용).
 
 **응답 (200)**
 ```json
-{
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJFMDAwMS...",
-    "empno": "E0001",
-    "role": "01",
-    "roleName": "팀장",
-    "name": "김팀장",
-    "pwdResetRequired": true
-  },
-  "meta": null
-}
-```
-**실패 (401)** — 사번/비번 불일치:
-```json
-{ "title":"Unauthorized", "status":401, "detail":"아이디 또는 비밀번호가 올바르지 않습니다" }
+{ "data": { "empno":"E0001","role":"01","roleName":"팀장","name":"김팀장","partCd":"P01" }, "meta": null }
 ```
 
-**화면 활용**
-- 로그인 폼(사번 + 비밀번호) → 이 API 호출 → 성공 시 `token`을 `localStorage`에 저장하고, 이후 모든 API 호출 인터셉터에서 `Authorization` 헤더로 자동 첨부.
-- `role`/`roleName`으로 **메뉴·버튼 노출 제어**(예: `01`/`ADMIN`이 아니면 "인사 등록"·"코드 관리" 버튼 숨김).
-- **`pwdResetRequired: true`면** 로그인 직후 "비밀번호 변경" 화면으로 강제 이동시키기.
-
----
-
-### 1-2. 비밀번호 변경 — `POST /api/v1/auth/password` 🔒인증
-
-첫 로그인 강제 변경 + 자발적 변경 공용. **본인 계정만**.
-
-**요청**
-```json
-{ "oldPassword": "E0002", "newPassword": "newpass123" }
-```
-**응답 (200)**: `{ "data": null, "meta": null }`
-**실패 (400)**: 현재 비번 불일치 / 새 비번 8자 미만 / 사번과 동일
-```json
-{ "status":400, "detail":"새 비밀번호는 8자 이상이어야 합니다" }
-```
-
-**화면 활용**
-- `pwdResetRequired`가 true인 사용자에게 강제로 띄우는 비밀번호 변경 폼(현재 비번 + 새 비번 + 새 비번 확인).
-- 성공 후 다시 로그인시키거나, 재로그인해 새 토큰의 `pwdResetRequired: false`를 확인.
-
----
-
-### 1-3. 내 정보 — `GET /api/v1/auth/me` 🔒인증
-
-토큰 소유자의 정보를 반환(헤더 사진·이름 표시, 권한 재확인용).
-
-**응답 (200)**
-```json
-{ "data": { "empno":"E0001","role":"01","roleName":"팀장","name":"김팀장","partCd":"P01","pwdResetRequired":true }, "meta": null }
-```
-
-**화면 활용**: 새로고침/앱 진입 시 토큰으로 현재 사용자 정보 복원 → 헤더에 "김팀장(팀장)" 표시, 권한 기반 UI 렌더링.
+**화면 활용**: 앱 진입/새로고침 시 현재 사용자 정보 조회 → 헤더에 "김팀장(팀장)" 표시, `role`/`roleName`으로 **메뉴·버튼 노출 제어**(예: `01`/`ADMIN`이 아니면 "인사 등록"·"코드 관리" 버튼 숨김).
+**실패**: 401(토큰 무효) / 403(HR 미등록 사번 등) — 의미는 0장 참고.
 
 ---
 
@@ -190,7 +144,7 @@ SR유형·역할·상태 등 코드값을 관리. 드롭다운/배지 표시에 
 { "empno":"E0005","empNm":"신입","deptCd":"D101","partCd":"P02","gradeCd":"사원","roleCd":"03","devYn":"Y","statusCd":"01" }
 ```
 **응답 (201)**: 생성된 인력. 검증 실패(사번/이름 누락 등) → **400**.
-> 참고: 신규 인력은 다음 서버 기동 시 로그인 계정이 자동 생성됩니다(초기 비번=사번).
+> 참고: 별도 계정 생성 절차는 없다 — HR에 등록된 사번은 게이트웨이(AD) 인증 통과 시 바로 API를 쓸 수 있다(HR 미등록 사번은 403).
 
 ### 4-4. 수정 — `PUT /api/v1/developers/{empno}` 🔒팀장·ADMIN
 `PUT /api/v1/developers/E0005` + 바디(위와 동일 형식) → **200**.
@@ -303,12 +257,12 @@ SR유형·역할·상태 등 코드값을 관리. 드롭다운/배지 표시에 
 
 ## 7. 전형적인 프론트 흐름 (요약)
 
-1. **앱 진입** → `GET /health`로 연결 확인.
-2. **로그인** → `POST /auth/login` → `token` 저장 + `role`로 메뉴 구성. `pwdResetRequired`면 비번 변경 유도.
-3. **이후 모든 호출** → 헤더 `Authorization: Bearer <token>` 자동 첨부.
+1. **앱 진입** → `GET /health`로 연결 확인. (게이트웨이 경유 접속이면 AD 로그인은 이미 게이트웨이가 처리한 상태)
+2. **사용자 정보** → `GET /auth/me` → `role`/`roleName`으로 메뉴 구성.
+3. **이후 모든 호출** → 게이트웨이 경유면 토큰 처리 불필요(게이트웨이가 `X-Access-Token` 자동 첨부). 직접 호출 시에만 헤더 수동 첨부.
 4. **메인 대시보드** → `GET /dev-volume`(막대) + `GET /resource`(도넛) + `GET /sr-projects`(Top5) 3개 호출로 위젯 렌더.
 5. **드릴다운** → 위젯 클릭 시 `unit=part/dev` 또는 `resource/overtime`, `sr-projects?page=` 재호출.
 6. **관리 기능(팀장·ADMIN)** → 인사/공통코드 CRUD, 집계 재실행. 없는 권한이면 버튼 숨김(+백엔드가 403으로 이중 방어).
-7. **토큰 만료(401)** → 로그인 화면으로 유도.
+7. **토큰 만료/무효(401)** → 게이트웨이 경유 재접속(AD 재로그인) 유도.
 
 > 데이터가 비어 보이면: 해당 월을 `POST /aggregations`로 먼저 집계했는지 확인.

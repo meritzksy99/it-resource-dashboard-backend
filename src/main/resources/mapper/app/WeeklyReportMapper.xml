@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.app.WeeklyReportMapper">
+
+  <!--
+    주간보고(DASH_WKLY_RPT) + 파트 취합본(DASH_WKLY_SUM).
+    주의: resultType 이 record 위치기반 생성자 매핑이므로,
+    SELECT 컬럼 순서 = record 컴포넌트 순서를 반드시 유지할 것.
+  -->
+
+  <!-- ── 개인 보고(DASH_WKLY_RPT) ─────────────────────────────────── -->
+
+  <sql id="reportColumns">
+    RPT_ID       AS rptId,
+    WEEK_YMD     AS weekYmd,
+    SR_NO        AS srNo,
+    SR_TITL      AS srTitl,
+    REG_EMPNO    AS regEmpno,
+    DEPT_CD      AS deptCd,
+    PART_CD      AS partCd,
+    RPT_CNTT     AS rptCntt,
+    PLAN_DATE    AS planDate,
+    SR_PLAN_DATE AS srPlanDate,
+    DELAY_RSN    AS delayRsn,
+    LEADER_CMT   AS leaderCmt
+  </sql>
+
+  <!-- 등록. IDENTITY PK 를 rptId 로 회수. -->
+  <insert id="insertReport" useGeneratedKeys="true" keyProperty="rptId" keyColumn="RPT_ID">
+    INSERT INTO DASH_WKLY_RPT
+      (WEEK_YMD, SR_NO, SR_TITL, REG_EMPNO, DEPT_CD, PART_CD,
+       RPT_CNTT, PLAN_DATE, SR_PLAN_DATE, DELAY_RSN, CREATED_BY)
+    VALUES
+      (#{weekYmd}, #{srNo}, #{srTitl,jdbcType=VARCHAR}, #{regEmpno},
+       #{deptCd,jdbcType=VARCHAR}, #{partCd,jdbcType=VARCHAR},
+       #{rptCntt}, #{planDate}, #{srPlanDate,jdbcType=VARCHAR}, #{delayRsn,jdbcType=VARCHAR}, #{actor})
+  </insert>
+
+  <!-- 스코프 조회. deptCd/partCd/regEmpno 는 nullable 필터. -->
+  <select id="selectReportsByWeek" resultType="com.meritz.dash.weekly.WeeklyReportRow">
+    SELECT <include refid="reportColumns"/>
+      FROM DASH_WKLY_RPT
+     WHERE WEEK_YMD = #{weekYmd}
+     <if test="deptCd != null"> AND DEPT_CD = #{deptCd}</if>
+     <if test="partCd != null"> AND PART_CD = #{partCd}</if>
+     <if test="regEmpno != null"> AND REG_EMPNO = #{regEmpno}</if>
+     ORDER BY RPT_ID
+  </select>
+
+  <!-- 단건 조회. 없으면 null. -->
+  <select id="selectReportById" resultType="com.meritz.dash.weekly.WeeklyReportRow">
+    SELECT <include refid="reportColumns"/>
+      FROM DASH_WKLY_RPT
+     WHERE RPT_ID = #{rptId}
+  </select>
+
+  <!-- (week, srNo, regEmpno) 중복 등록 사전 검사. -->
+  <select id="countReportByWeekSrEmp" resultType="int">
+    SELECT COUNT(*)
+      FROM DASH_WKLY_RPT
+     WHERE WEEK_YMD  = #{weekYmd}
+       AND SR_NO     = #{srNo}
+       AND REG_EMPNO = #{regEmpno}
+  </select>
+
+  <!-- 부분 수정(서비스단에서 기존값 병합 후 전 컬럼 반영). -->
+  <update id="updateReport">
+    UPDATE DASH_WKLY_RPT
+       SET RPT_CNTT     = #{rptCntt},
+           PLAN_DATE    = #{planDate},
+           SR_PLAN_DATE = #{srPlanDate,jdbcType=VARCHAR},
+           DELAY_RSN    = #{delayRsn,jdbcType=VARCHAR},
+           UPDATED_AT   = SYSTIMESTAMP,
+           UPDATED_BY   = #{actor}
+     WHERE RPT_ID = #{rptId}
+  </update>
+
+  <!-- 업무리더 추가의견. -->
+  <update id="updateLeaderComment">
+    UPDATE DASH_WKLY_RPT
+       SET LEADER_CMT = #{comment,jdbcType=VARCHAR},
+           UPDATED_AT = SYSTIMESTAMP,
+           UPDATED_BY = #{actor}
+     WHERE RPT_ID = #{rptId}
+  </update>
+
+  <delete id="deleteReport">
+    DELETE FROM DASH_WKLY_RPT WHERE RPT_ID = #{rptId}
+  </delete>
+
+  <!-- ── 파트 취합본(DASH_WKLY_SUM) ───────────────────────────────── -->
+
+  <sql id="summaryColumns">
+    SUM_ID         AS sumId,
+    WEEK_YMD       AS weekYmd,
+    DEPT_CD        AS deptCd,
+    PART_CD        AS partCd,
+    SUM_CNTT       AS sumCntt,
+    REG_EMPNO      AS regEmpno,
+    TEAM_CMT       AS teamCmt,
+    TEAM_CMT_EMPNO AS teamCmtEmpno
+  </sql>
+
+  <!-- 등록 — 항상 신규 INSERT(같은 주·같은 파트 다건 허용, V022). IDENTITY PK 를 sumId 로 회수. -->
+  <insert id="insertSummary" useGeneratedKeys="true" keyProperty="sumId" keyColumn="SUM_ID">
+    INSERT INTO DASH_WKLY_SUM
+      (WEEK_YMD, DEPT_CD, PART_CD, SUM_CNTT, REG_EMPNO, CREATED_BY)
+    VALUES
+      (#{weekYmd}, #{deptCd}, #{partCd}, #{sumCntt}, #{regEmpno}, #{actor})
+  </insert>
+
+  <!-- 스코프 조회. deptCd/partCd 는 nullable 필터. 같은 파트 내 최신(SUM_ID DESC) 우선. -->
+  <select id="selectSummariesByWeek" resultType="com.meritz.dash.weekly.WeeklySummaryRow">
+    SELECT <include refid="summaryColumns"/>
+      FROM DASH_WKLY_SUM
+     WHERE WEEK_YMD = #{weekYmd}
+     <if test="deptCd != null"> AND DEPT_CD = #{deptCd}</if>
+     <if test="partCd != null"> AND PART_CD = #{partCd}</if>
+     ORDER BY DEPT_CD, PART_CD, SUM_ID DESC
+  </select>
+
+  <!-- 단건 조회(update/delete/final-comment 대상 확인용). 없으면 null. -->
+  <select id="selectSummaryById" resultType="com.meritz.dash.weekly.WeeklySummaryRow">
+    SELECT <include refid="summaryColumns"/>
+      FROM DASH_WKLY_SUM
+     WHERE SUM_ID = #{sumId}
+  </select>
+
+  <!-- 취합본 본문만 수정 — TEAM_CMT/TEAM_CMT_EMPNO 는 건드리지 않는다. -->
+  <update id="updateSummary">
+    UPDATE DASH_WKLY_SUM
+       SET SUM_CNTT   = #{sumCntt},
+           UPDATED_AT = SYSTIMESTAMP,
+           UPDATED_BY = #{actor}
+     WHERE SUM_ID = #{sumId}
+  </update>
+
+  <delete id="deleteSummary">
+    DELETE FROM DASH_WKLY_SUM WHERE SUM_ID = #{sumId}
+  </delete>
+
+  <!-- ── 취합본-개인보고 링크(DASH_WKLY_SUM_RPT, V023) ────────────── -->
+
+  <!-- 선택 링크 일괄 INSERT. INSERT SELECT 라 rptIds 내 중복도 1행만 들어간다. -->
+  <insert id="insertSummaryReports">
+    INSERT INTO DASH_WKLY_SUM_RPT (SUM_ID, RPT_ID)
+    SELECT #{sumId}, RPT_ID
+      FROM DASH_WKLY_RPT
+     WHERE RPT_ID IN
+     <foreach collection="rptIds" item="rptId" open="(" separator="," close=")">#{rptId}</foreach>
+  </insert>
+
+  <!-- 해당 취합본의 링크 전부 삭제(교체용). -->
+  <delete id="deleteSummaryReports">
+    DELETE FROM DASH_WKLY_SUM_RPT WHERE SUM_ID = #{sumId}
+  </delete>
+
+  <!-- rptIds 검증용 키 조회 — 존재/주차/파트 확인. -->
+  <select id="selectReportsForValidation" resultType="com.meritz.dash.weekly.WeeklyReportKey">
+    SELECT RPT_ID   AS rptId,
+           WEEK_YMD AS weekYmd,
+           DEPT_CD  AS deptCd,
+           PART_CD  AS partCd
+      FROM DASH_WKLY_RPT
+     WHERE RPT_ID IN
+     <foreach collection="rptIds" item="rptId" open="(" separator="," close=")">#{rptId}</foreach>
+  </select>
+
+  <!-- sumIds 의 선택 보고 임베드 일괄 조회(한 방 쿼리, N+1 금지). -->
+  <select id="selectSummaryReports" resultType="com.meritz.dash.weekly.WeeklySummaryReportRow">
+    SELECT L.SUM_ID       AS sumId,
+           R.RPT_ID       AS rptId,
+           R.SR_NO        AS srNo,
+           R.SR_TITL      AS srTitl,
+           R.REG_EMPNO    AS regEmpno,
+           R.RPT_CNTT     AS rptCntt,
+           R.PLAN_DATE    AS planDate,
+           R.SR_PLAN_DATE AS srPlanDate,
+           R.DELAY_RSN    AS delayRsn,
+           R.LEADER_CMT   AS leaderCmt
+      FROM DASH_WKLY_SUM_RPT L
+      JOIN DASH_WKLY_RPT R ON R.RPT_ID = L.RPT_ID
+     WHERE L.SUM_ID IN
+     <foreach collection="sumIds" item="sumId" open="(" separator="," close=")">#{sumId}</foreach>
+     ORDER BY L.SUM_ID, R.RPT_ID
+  </select>
+
+  <!-- 팀장 최종의견. -->
+  <update id="updateFinalComment">
+    UPDATE DASH_WKLY_SUM
+       SET TEAM_CMT       = #{comment,jdbcType=VARCHAR},
+           TEAM_CMT_EMPNO = #{actor},
+           UPDATED_AT     = SYSTIMESTAMP,
+           UPDATED_BY     = #{actor}
+     WHERE SUM_ID = #{sumId}
+  </update>
+
+</mapper>

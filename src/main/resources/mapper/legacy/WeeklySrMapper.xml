@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.legacy.WeeklySrMapper">
+
+  <!--
+    주간보고용 기간계 SR 참조 단건 조회 (SELECT-only, #{} 바인드만 — CLAUDE.md 3.2).
+    주의: resultType 이 record(SrRef) 위치기반 생성자 매핑이므로
+    SELECT 컬럼 순서 = SrRef 컴포넌트 순서(srNo, srTitl, srPlanDate) 유지.
+  -->
+  <select id="selectSrRef" resultType="com.meritz.dash.weekly.SrRef">
+    SELECT SR_NO          AS srNo,
+           TITL_CNTT      AS srTitl,
+           RFLC_SCDL_DATE AS srPlanDate
+      FROM TBCPPE091M00
+     WHERE SR_NO = #{srNo}
+  </select>
+
+</mapper>

@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.meritz.dash.mapper.app.IssueMapper">
+
+  <!-- record DTO 는 constructor 매핑(선언 순서 고정). BLOB(FILE_DATA)은 selectImage 로만 회수한다. -->
+
+  <resultMap id="issueItemMap" type="com.meritz.dash.issue.IssueItem">
+    <constructor>
+      <idArg column="ISSUE_ID"   javaType="long"/>
+      <arg column="SCRN_ID"      javaType="string"/>
+      <arg column="REG_EMPNO"    javaType="string"/>
+      <arg column="ERR_CNTT"     javaType="string"/>
+      <arg column="HAS_IMAGE"    javaType="_boolean"/>
+      <arg column="STAT_CD"      javaType="string"/>
+      <arg column="PRIR_CD"      javaType="string"/>
+      <arg column="RSLV_CNTT"    javaType="string"/>
+      <arg column="CREATED_AT"   javaType="java.time.LocalDateTime"/>
+      <arg column="CREATED_BY"   javaType="string"/>
+      <arg column="UPDATED_AT"   javaType="java.time.LocalDateTime"/>
+      <arg column="UPDATED_BY"   javaType="string"/>
+    </constructor>
+  </resultMap>
+
+  <resultMap id="issueDetailMap" type="com.meritz.dash.issue.IssueDetail">
+    <constructor>
+      <idArg column="ISSUE_ID"    javaType="long"/>
+      <arg column="SCRN_ID"       javaType="string"/>
+      <arg column="REG_EMPNO"     javaType="string"/>
+      <arg column="ERR_CNTT"      javaType="string"/>
+      <arg column="FILE_NM"       javaType="string"/>
+      <arg column="FILE_CTYPE"    javaType="string"/>
+      <arg column="HAS_IMAGE"     javaType="_boolean"/>
+      <arg column="STAT_CD"       javaType="string"/>
+      <arg column="PRIR_CD"       javaType="string"/>
+      <arg column="RSLV_CNTT"     javaType="string"/>
+      <arg column="CREATED_AT"    javaType="java.time.LocalDateTime"/>
+      <arg column="CREATED_BY"    javaType="string"/>
+      <arg column="UPDATED_AT"    javaType="java.time.LocalDateTime"/>
+      <arg column="UPDATED_BY"    javaType="string"/>
+      <arg column="COMMENT_COUNT" javaType="_long"/>
+    </constructor>
+  </resultMap>
+
+  <resultMap id="issueCommentMap" type="com.meritz.dash.issue.IssueComment">
+    <constructor>
+      <idArg column="CMT_ID"     javaType="long"/>
+      <arg column="ISSUE_ID"     javaType="long"/>
+      <arg column="REG_EMPNO"    javaType="string"/>
+      <arg column="CMT_CNTT"     javaType="string"/>
+      <arg column="CREATED_AT"   javaType="java.time.LocalDateTime"/>
+      <arg column="CREATED_BY"   javaType="string"/>
+      <arg column="UPDATED_AT"   javaType="java.time.LocalDateTime"/>
+      <arg column="UPDATED_BY"   javaType="string"/>
+    </constructor>
+  </resultMap>
+
+  <resultMap id="imageDataMap" type="com.meritz.dash.mapper.app.IssueMapper$ImageData">
+    <constructor>
+      <arg column="FILE_DATA"  javaType="_byte[]" jdbcType="BLOB"/>
+      <arg column="FILE_CTYPE" javaType="string"/>
+    </constructor>
+  </resultMap>
+
+  <!-- 목록. BLOB 미포함, hasImage 만 노출. statuses null/미지정=전체. 최신순(ISSUE_ID DESC). -->
+  <select id="selectList" resultMap="issueItemMap">
+    SELECT ISSUE_ID, SCRN_ID, REG_EMPNO, ERR_CNTT,
+           CASE WHEN FILE_DATA IS NULL THEN 0 ELSE 1 END AS HAS_IMAGE,
+           STAT_CD, PRIR_CD, RSLV_CNTT,
+           CREATED_AT, CREATED_BY, UPDATED_AT, UPDATED_BY
+      FROM DASH_ISSUE
+    <where>
+      <if test="statuses != null and !statuses.isEmpty()">
+        STAT_CD IN
+        <foreach item="s" collection="statuses" open="(" separator="," close=")">#{s}</foreach>
+      </if>
+      <if test="screenId != null">AND SCRN_ID = #{screenId}</if>
+    </where>
+    ORDER BY ISSUE_ID DESC
+  </select>
+
+  <!-- 상세(BLOB 제외) + 댓글 수. 없으면 null. -->
+  <select id="selectById" resultMap="issueDetailMap">
+    SELECT t.ISSUE_ID, t.SCRN_ID, t.REG_EMPNO, t.ERR_CNTT, t.FILE_NM, t.FILE_CTYPE,
+           CASE WHEN t.FILE_DATA IS NULL THEN 0 ELSE 1 END AS HAS_IMAGE,
+           t.STAT_CD, t.PRIR_CD, t.RSLV_CNTT,
+           t.CREATED_AT, t.CREATED_BY, t.UPDATED_AT, t.UPDATED_BY,
+           (SELECT COUNT(*) FROM DASH_ISSUE_CMT c WHERE c.ISSUE_ID = t.ISSUE_ID) AS COMMENT_COUNT
+      FROM DASH_ISSUE t
+     WHERE t.ISSUE_ID = #{issueId}
+  </select>
+
+  <!-- 스크린샷 원본(BLOB) + Content-Type. 이슈 미존재 또는 이미지 없음이면 null. -->
+  <select id="selectImage" resultMap="imageDataMap">
+    SELECT FILE_DATA, FILE_CTYPE
+      FROM DASH_ISSUE
+     WHERE ISSUE_ID = #{issueId}
+       AND FILE_DATA IS NOT NULL
+  </select>
+
+  <!-- 등록. IDENTITY PK 를 issueId 로 회수. -->
+  <insert id="insert" useGeneratedKeys="true" keyProperty="issueId" keyColumn="ISSUE_ID">
+    INSERT INTO DASH_ISSUE
+      (SCRN_ID, REG_EMPNO, ERR_CNTT, FILE_NM, FILE_CTYPE, FILE_DATA,
+       STAT_CD, PRIR_CD, RSLV_CNTT, CREATED_BY)
+    VALUES
+      (#{screenId}, #{regEmpno}, #{errCntt},
+       #{fileNm,jdbcType=VARCHAR}, #{fileCtype,jdbcType=VARCHAR}, #{fileData,jdbcType=BLOB},
+       #{statCd}, #{prirCd}, #{rslvCntt,jdbcType=VARCHAR}, #{actor})
+  </insert>
+
+  <!-- 부분수정(서비스단에서 기존값 병합 후 전 컬럼 반영). 첨부(FILE_*)는 수정 대상 아님. -->
+  <update id="update">
+    UPDATE DASH_ISSUE
+       SET ERR_CNTT   = #{errCntt},
+           STAT_CD    = #{statCd},
+           PRIR_CD    = #{prirCd},
+           RSLV_CNTT  = #{rslvCntt,jdbcType=VARCHAR},
+           UPDATED_AT = SYSTIMESTAMP,
+           UPDATED_BY = #{actor}
+     WHERE ISSUE_ID = #{issueId}
+  </update>
+
+  <!-- 이슈 삭제(FK ON DELETE CASCADE 로 댓글도 함께 삭제). -->
+  <delete id="delete">
+    DELETE FROM DASH_ISSUE WHERE ISSUE_ID = #{issueId}
+  </delete>
+
+  <!-- 댓글 목록(등록순 오름차순). -->
+  <select id="selectComments" resultMap="issueCommentMap">
+    SELECT CMT_ID, ISSUE_ID, REG_EMPNO, CMT_CNTT,
+           CREATED_AT, CREATED_BY, UPDATED_AT, UPDATED_BY
+      FROM DASH_ISSUE_CMT
+     WHERE ISSUE_ID = #{issueId}
+     ORDER BY CMT_ID
+  </select>
+
+  <!-- 댓글 단건(권한 판정용). 없으면 null. -->
+  <select id="selectComment" resultMap="issueCommentMap">
+    SELECT CMT_ID, ISSUE_ID, REG_EMPNO, CMT_CNTT,
+           CREATED_AT, CREATED_BY, UPDATED_AT, UPDATED_BY
+      FROM DASH_ISSUE_CMT
+     WHERE ISSUE_ID = #{issueId}
+       AND CMT_ID   = #{commentId}
+  </select>
+
+  <!-- 댓글 등록. IDENTITY PK 를 cmtId 로 회수. -->
+  <insert id="insertComment" useGeneratedKeys="true" keyProperty="cmtId" keyColumn="CMT_ID">
+    INSERT INTO DASH_ISSUE_CMT (ISSUE_ID, REG_EMPNO, CMT_CNTT, CREATED_BY)
+    VALUES (#{issueId}, #{regEmpno}, #{cmtCntt}, #{actor})
+  </insert>
+
+  <!-- 댓글 수정. -->
+  <update id="updateComment">
+    UPDATE DASH_ISSUE_CMT
+       SET CMT_CNTT   = #{cmtCntt},
+           UPDATED_AT = SYSTIMESTAMP,
+           UPDATED_BY = #{actor}
+     WHERE ISSUE_ID = #{issueId}
+       AND CMT_ID   = #{cmtId}
+  </update>
+
+  <!-- 댓글 삭제. -->
+  <delete id="deleteComment">
+    DELETE FROM DASH_ISSUE_CMT
+     WHERE ISSUE_ID = #{issueId}
+       AND CMT_ID   = #{commentId}
+  </delete>
+
+</mapper>

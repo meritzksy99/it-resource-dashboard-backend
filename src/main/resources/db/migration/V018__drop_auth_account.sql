@@ -1,0 +1,2 @@
+-- V018: AD/게이트웨이 전환 — 자체 계정 테이블 제거. FK 없음.
+DROP TABLE AUTH_ACCOUNT CASCADE CONSTRAINTS;

@@ -135,8 +135,8 @@ public class DmlSrController {
                 대상 SR 의 점검 여부(checkYn 'Y'/'N')를 저장한다(멱등 upsert). **인증(JWT) 필수**.
 
                 **쓰기 권한(대상 SR 의 DEV_DEPT_CD/DEV_PART_CD 기준, fail-closed)**
-                - 업무리더(02): **본인 파트** 건만(타파트 **403**). 팀장(01): **본인 부서** 건만(타부서 **403**).
-                - ADMIN: 전체 허용. 일반직원(03)·기타: **403**. 대상 SR 미존재: **404**. checkYn ∉ {Y,N}: **400**.
+                - 업무리더(02)·일반직원(03): **본인 파트** 건만(타파트 **403**). 팀장(01): **본인 부서** 건만(타부서 **403**).
+                - ADMIN: 전체 허용. 기타 역할: **403**. 대상 SR 미존재: **404**. checkYn ∉ {Y,N}: **400**.
                 """
     )
     @PatchMapping("/{srNo}/check")
@@ -154,7 +154,7 @@ public class DmlSrController {
                 점검 화면에서 대상 SR 을 **개선건으로 올림/내림**(IMPROVE_YN 'Y'/'N', 멱등 upsert). \
                 Y 로 올리면 ③ 개선 대상 목록에서 조회된다. **인증(JWT) 필수**.
 
-                **쓰기 권한** — 점검(check)과 동일(02 본인 파트·01 본인 부서·ADMIN 전체, 03=403, 미존재=404, improveYn ∉ {Y,N}=400).
+                **쓰기 권한** — 점검(check)과 동일(02·03 본인 파트·01 본인 부서·ADMIN 전체, 미존재=404, improveYn ∉ {Y,N}=400).
                 """
     )
     @PatchMapping("/{srNo}/improve-target")
@@ -172,7 +172,7 @@ public class DmlSrController {
                 대상 SR 의 개선 계획(improvePlan)·완료예정일(planCmptDate, yyyyMMdd)·완료여부(cmptYn 'Y'/'N', 미지정 시 'N')·\
                 비고(remark)를 등록/갱신한다(멱등 upsert, IMPROVE_YN='Y' 처리). **인증(JWT) 필수**.
 
-                **쓰기 권한** — ②/점검과 동일(02 본인 파트·01 본인 부서·ADMIN 전체, 03=403, 미존재=404, cmptYn ∉ {Y,N}=400).
+                **쓰기 권한** — 점검(check)과 동일(02·03 본인 파트·01 본인 부서·ADMIN 전체, 미존재=404, cmptYn ∉ {Y,N}=400).
                 """
     )
     @PutMapping("/{srNo}/improvement")

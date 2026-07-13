@@ -34,7 +34,7 @@ PLATFORM=linux/amd64 ./deploy/build-image.sh 0.0.1     # 서버가 x86_64
 # 참고: 서버와 빌드머신 아키텍처가 같을 때만 단순 빌드 사용 가능:
 #   ./gradlew bootJar -x test && docker build -t it-dash:0.0.1 .
 ```
-> ✅ 위 방식으로 만든 이미지(약 532MB)로 컨테이너 기동→양쪽 DB 연결→`/health`·로그인·조회 200, Docker HEALTHCHECK `healthy` 까지 실측 검증됨.
+> ✅ 위 방식으로 만든 이미지(약 532MB)로 컨테이너 기동→양쪽 DB 연결→`/health`·조회 200, Docker HEALTHCHECK `healthy` 까지 실측 검증됨.
 >
 > **대안(클린망/CI, 소스부터 한 방에):** `docker build -f Dockerfile.selfcontained -t it-dash:0.0.1 .`
 > — 단 사내망에서 쓰려면 빌드 스테이지 컨테이너의 JDK cacerts 에 사내 CA 를 `keytool -importcert` 로 주입해야 한다(그렇지 않으면 위 PKIX 오류).
@@ -55,11 +55,16 @@ docker images | grep it-dash     # it-dash:0.0.1 확인
 `.env.example` 을 복사해 실제 접속정보로 채운다. **이 파일은 커밋 금지.**
 ```bash
 cp .env.example it-dash.env
-vi it-dash.env   # APP_DB_URL / LEGACY_DB_URL / 계정·비번 / JWT_SECRET / ADMIN_* 등 입력
+vi it-dash.env   # APP_DB_URL / LEGACY_DB_URL / 계정·비번 / GATEWAY_* 등 입력
 ```
 - `APP_DB_URL=jdbc:oracle:thin:@<앱DB호스트>:<포트>/<서비스명>`
 - `LEGACY_DB_URL=jdbc:oracle:thin:@<기간계호스트>:<포트>/<서비스명>`
-- `JWT_SECRET` 은 32바이트 이상 랜덤값(예: `openssl rand -base64 48`).
+- **게이트웨이 인증(자체 로그인 없음 — X-Access-Token 검증)**:
+  - `GATEWAY_JWKS_URL` **(필수)** — 운영 Keycloak JWKS 엔드포인트(`.../realms/<realm>/protocol/openid-connect/certs`). 미설정 시 기동 실패(안전).
+  - `GATEWAY_ISSUER` **(필수)** — 운영 Keycloak issuer(`.../realms/<realm>`). 미설정 시 기동 실패.
+  - `GATEWAY_AUDIENCE` — 토큰 aud 검증값(기본 `oauth2-proxy`).
+  - `GATEWAY_ALLOWED_ROLES` — 우리 서비스 허용 게이트웨이 role(기본 `dev-user`). **미확정 — 운영팀 확인 필요.**
+  - `SERVER_CONTEXT_PATH` — 게이트웨이가 발급하는 서비스 경로명(예: `/it-dash`). **운영팀 발급값으로 설정.**
 - `FLYWAY_ENABLED` 는 5번 참고.
 
 ## 5) 컨테이너 실행
@@ -77,7 +82,7 @@ docker run -d --name it-dash \
 ```bash
 docker logs -f it-dash                        # 기동 로그 / Flyway 결과
 curl http://<VM_IP>:8080/api/v1/health        # {"data":{"status":"UP"}} 기대
-# Swagger: http://<VM_IP>:8080/swagger-ui/index.html  (Authorize 에 로그인 토큰 첨부)
+# Swagger: http://<VM_IP>:8080/swagger-ui/index.html  (인증 API는 X-Access-Token 헤더 필요 — 게이트웨이 경유 접속 시 자동 첨부)
 ```
 
 ---
@@ -94,7 +99,7 @@ curl http://<VM_IP>:8080/api/v1/health        # {"data":{"status":"UP"}} 기대
 
 ## 운영 주의
 - **기간계 down 내성**: 기동 시 기간계가 죽어 있어도 앱은 정상 기동한다(`initialization-fail-timeout=-1`). 메인 대시보드는 app DB 기반이라 동작. 상세 드릴다운만 영향.
-- **시크릿**: `JWT_SECRET`/`ADMIN_PASSWORD`/DB 비번은 env 로만 주입(이미지·소스에 미포함). `admin` 계정은 평문 비교 경로이므로 강한 비번 필수.
+- **시크릿/필수 env**: DB 비번·`GATEWAY_JWKS_URL`·`GATEWAY_ISSUER` 는 env 로만 주입(이미지·소스에 미포함). 운영은 `app.gateway.enabled=true` 고정 — env 로 인증을 끌 수 없다.
 - **네트워크 노출**: 앱은 `0.0.0.0:8080` 바인딩. 폐쇄망 방화벽/보안그룹으로 접근 대상 제한 권장.
 - **타임존**: 컨테이너 `Asia/Seoul` 고정.
 - **업그레이드**: 새 버전은 태그만 올려(`it-dash:0.0.2`) 1~5번 반복 후 `docker stop/rm` → `docker run`.

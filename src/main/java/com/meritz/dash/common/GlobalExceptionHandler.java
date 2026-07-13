@@ -1,6 +1,5 @@
 package com.meritz.dash.common;
 
-import com.meritz.dash.auth.AuthPolicyException;
 import com.meritz.dash.auth.ForbiddenException;
 import com.meritz.dash.auth.UnauthorizedException;
 import org.slf4j.Logger;
@@ -8,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -20,15 +20,6 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleBadRequest(IllegalArgumentException ex) {
         log.warn("{} {}: {}", "400", "IllegalArgumentException", ex.getMessage());
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-    }
-
-    @ExceptionHandler(AuthPolicyException.class)
-    public ProblemDetail handleAuthPolicy(AuthPolicyException ex) {
-        log.warn("{} {}: {}", ex.httpStatus().value(), ex.errorCode(), ex.getMessage());
-        ProblemDetail pd = ProblemDetail.forStatusAndDetail(ex.httpStatus(), ex.getMessage());
-        pd.setProperty("errorCode", ex.errorCode());
-        ex.properties().forEach(pd::setProperty);
-        return pd;
     }
 
     @ExceptionHandler(UnauthorizedException.class)
@@ -47,6 +38,19 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleNotFound(NotFoundException ex) {
         log.warn("{} {}: {}", "404", "NotFoundException", ex.getMessage());
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    public ProblemDetail handleConflict(ConflictException ex) {
+        log.warn("{} {}: {}", "409", "ConflictException", ex.getMessage());
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ProblemDetail handleMissingParameter(MissingServletRequestParameterException ex) {
+        String detail = "필수 파라미터가 누락되었습니다: " + ex.getParameterName();
+        log.warn("{} {}: {}", "400", "MissingServletRequestParameterException", detail);
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, detail);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

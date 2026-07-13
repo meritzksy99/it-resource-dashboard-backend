@@ -19,7 +19,8 @@ import static org.mockito.Mockito.*;
 /**
  * DmlSrService RBAC 단위 테스트.
  * 조회: 03=본인 담당건 · 02=본인 파트 · 01=본인 부서(파트 드릴다운) · ADMIN=전체.
- * 쓰기: 대상 SR 의 DEV_DEPT/PART 기준 fail-closed, 03 은 불가, 대상 없으면 404.
+ * 쓰기: 대상 SR 의 DEV_DEPT/PART 기준 fail-closed, 대상 없으면 404.
+ * 02/03 은 본인 부서+파트 건만, 01 은 본인 부서 건만, ADMIN 은 전체.
  */
 class DmlSrServiceTest {
 
@@ -226,13 +227,57 @@ class DmlSrServiceTest {
     }
 
     @Test
-    @DisplayName("setCheck 03: 일반직원 → 403")
-    void set_check_staff_forbidden() {
+    @DisplayName("setCheck 03: 본인 파트 SR → upsertCheck 호출(actor=본인)")
+    void set_check_staff_own_part() {
         AuthContext.set("7451", "03", "2139", "P01");
+        when(mapper.findScopeRef("SR1")).thenReturn(new ScopeRef("SR1", "2139", "P01", "7452"));
 
-        assertThatThrownBy(() -> service.setCheck("SR1", "Y"))
+        service.setCheck("SR1", "Y");
+
+        verify(mapper).upsertCheck("SR1", "Y", "7451");
+    }
+
+    @Test
+    @DisplayName("setImproveTarget 03: 본인 파트 SR → upsertImproveTarget 호출")
+    void set_improve_target_staff_own_part() {
+        AuthContext.set("7451", "03", "2139", "P01");
+        when(mapper.findScopeRef("SR1")).thenReturn(new ScopeRef("SR1", "2139", "P01", "7452"));
+
+        service.setImproveTarget("SR1", "Y");
+
+        verify(mapper).upsertImproveTarget("SR1", "Y", "7451");
+    }
+
+    @Test
+    @DisplayName("setImproveTarget 03: 타 파트 SR → 403, upsert 미호출")
+    void set_improve_target_staff_other_part_forbidden() {
+        AuthContext.set("7451", "03", "2139", "P01");
+        when(mapper.findScopeRef("SR9")).thenReturn(new ScopeRef("SR9", "2139", "P02", "7460"));
+
+        assertThatThrownBy(() -> service.setImproveTarget("SR9", "Y"))
                 .isInstanceOf(ForbiddenException.class);
-        verify(mapper, never()).findScopeRef(any());
+        verify(mapper, never()).upsertImproveTarget(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("setCheck 03: 타 파트 SR → 403, upsert 미호출")
+    void set_check_staff_other_part_forbidden() {
+        AuthContext.set("7451", "03", "2139", "P01");
+        when(mapper.findScopeRef("SR9")).thenReturn(new ScopeRef("SR9", "2139", "P02", "7460"));
+
+        assertThatThrownBy(() -> service.setCheck("SR9", "Y"))
+                .isInstanceOf(ForbiddenException.class);
+        verify(mapper, never()).upsertCheck(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("setCheck 03: 같은 파트코드·다른 부서 SR → 403 (파트코드 부서간 재사용 방지)")
+    void set_check_staff_same_part_other_dept_forbidden() {
+        AuthContext.set("7451", "03", "2139", "P01");
+        when(mapper.findScopeRef("SR8")).thenReturn(new ScopeRef("SR8", "2735", "P01", "6002"));
+
+        assertThatThrownBy(() -> service.setCheck("SR8", "Y"))
+                .isInstanceOf(ForbiddenException.class);
         verify(mapper, never()).upsertCheck(any(), any(), any());
     }
 
@@ -278,6 +323,28 @@ class DmlSrServiceTest {
         when(mapper.findScopeRef("SR9")).thenReturn(new ScopeRef("SR9", "2735", "P12", "6002"));
 
         assertThatThrownBy(() -> service.saveImprovement("SR9", "계획", null, "Y", null))
+                .isInstanceOf(ForbiddenException.class);
+        verify(mapper, never()).upsertImprovement(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("saveImprovement 03: 본인 파트 SR → upsertImprovement 호출(actor=본인)")
+    void save_improvement_staff_own_part() {
+        AuthContext.set("7451", "03", "2139", "P01");
+        when(mapper.findScopeRef("SR1")).thenReturn(new ScopeRef("SR1", "2139", "P01", "7452"));
+
+        service.saveImprovement("SR1", "바인드 변수로 전환", "20260731", null, "정기점검");
+
+        verify(mapper).upsertImprovement("SR1", "바인드 변수로 전환", "20260731", "N", "정기점검", "7451");
+    }
+
+    @Test
+    @DisplayName("saveImprovement 03: 타 파트 SR → 403, upsert 미호출")
+    void save_improvement_staff_other_part_forbidden() {
+        AuthContext.set("7451", "03", "2139", "P01");
+        when(mapper.findScopeRef("SR9")).thenReturn(new ScopeRef("SR9", "2139", "P02", "7460"));
+
+        assertThatThrownBy(() -> service.saveImprovement("SR9", "계획", null, "N", null))
                 .isInstanceOf(ForbiddenException.class);
         verify(mapper, never()).upsertImprovement(any(), any(), any(), any(), any(), any());
     }

@@ -23,4 +23,12 @@ class MigrationIT extends AbstractOracleIT {
         // V002 기본 4명(E0001~E0004) + V013 추가 14명(AI솔루션팀 8 + 개발팀 6) = 18명
         assertThat(devs).isEqualTo(18);
     }
+
+    @Test
+    @DisplayName("V019: EMP_ROLE 그룹에 ADMIN 코드가 등록되어 있다(관리자 권한은 HR ROLE_CD='ADMIN'으로 부여)")
+    void emp_role_has_admin_code() {
+        String adminName = jdbc.queryForObject(
+                "SELECT CD_NM FROM CD_COMMON WHERE GRP_CD='EMP_ROLE' AND CD_VAL='ADMIN'", String.class);
+        assertThat(adminName).isEqualTo("관리자");
+    }
 }

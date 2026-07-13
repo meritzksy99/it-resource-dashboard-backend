@@ -30,28 +30,18 @@
 
 <div class="bar">
   <div><label>Base URL</label><input id="base" size="40"> <span class="hint">(기본: 이 페이지 출처)</span></div>
-  <div><label>토큰</label><input id="token" placeholder="로그인하면 자동 채워짐"></div>
-  <div><span id="who">미로그인</span> <button onclick="clearToken()">토큰 지우기</button></div>
+  <div><label>토큰</label><input id="token" placeholder="X-Access-Token 값 (게이트웨이 토큰 / dev 우회 시 사번)"></div>
+  <div><span class="hint">인증은 게이트웨이(Keycloak/AD) 전담 — 로그인 API 없음. 모든 호출에 X-Access-Token 헤더로 첨부됨.
+    app.gateway.enabled=false(local 우회)면 토큰 대신 사번(예: 5355)만 입력.</span>
+    <button onclick="clearToken()">토큰 지우기</button></div>
 </div>
 
 <!-- ===== 인증 ===== -->
-<h2>1. 인증</h2>
+<h2>1. 인증 (게이트웨이 X-Access-Token)</h2>
 <fieldset>
-  <legend>로그인 (POST /auth/login) — 공개</legend>
-  <label>사번</label><input id="loginEmpno" value="admin">
-  <label>비밀번호</label><input id="loginPw" value="admin">
-  <button onclick="login()">로그인</button>
-  <div class="hint">admin/admin(관리자), 5355/5355(팀장), 9320/9320(일반직원) — 사번계정 초기비번=사번</div>
-  <div id="out-login" class="out"></div>
-</fieldset>
-<fieldset>
-  <legend>내 정보 / 비밀번호 변경</legend>
+  <legend>내 정보</legend>
   <button onclick="call('GET','/api/v1/auth/me',null,'out-me')">GET /auth/me</button>
   <div id="out-me" class="out"></div>
-  <hr>
-  <label>현재 비번</label><input id="pwOld"><label>새 비번(8자+)</label><input id="pwNew" value="newpass123">
-  <button onclick="changePw()">비밀번호 변경</button>
-  <div id="out-pw" class="out"></div>
 </fieldset>
 
 <!-- ===== 헬스 ===== -->
@@ -162,12 +152,12 @@
   const v = id => $(id).value.trim();
   const enc = encodeURIComponent;
   const token = () => v('token');
-  function clearToken(){ $('token').value=''; $('who').textContent='미로그인'; }
+  function clearToken(){ $('token').value=''; }
 
   async function call(method, path, body, outId){
     const out = $(outId);
     const headers = { 'Content-Type':'application/json' };
-    if (token()) headers['Authorization'] = 'Bearer ' + token();
+    if (token()) headers['X-Access-Token'] = token();
     try {
       const res = await fetch(v('base') + path, { method, headers, body: body!=null ? JSON.stringify(body) : undefined });
       const text = await res.text();
@@ -178,17 +168,6 @@
       return { res, text };
     } catch (e) { out.className='out err'; out.textContent = method+' '+path+'\n→ 요청 실패: '+e; return {res:null}; }
   }
-
-  async function login(){
-    const { res, text } = await call('POST','/api/v1/auth/login', { empno:v('loginEmpno'), password:v('loginPw') }, 'out-login');
-    if (res && res.ok) {
-      const d = JSON.parse(text).data;
-      $('token').value = d.token;
-      $('who').textContent = '로그인: '+d.name+' ('+d.roleName+') / pwdReset='+d.pwdResetRequired;
-      $('pwOld').value = v('loginPw');
-    }
-  }
-  function changePw(){ call('POST','/api/v1/auth/password',{ oldPassword:v('pwOld'), newPassword:v('pwNew') },'out-pw'); }
 
   // 집계
   function aggRun(){ call('POST','/api/v1/aggregations',{ periodYm:v('aggYm') },'out-agg'); }
